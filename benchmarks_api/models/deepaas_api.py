@@ -8,6 +8,7 @@ import pkg_resources
 # import project's config.py
 import benchmarks_api.config as cfg
 
+import benchmark_cnn as benchmark
 
 def get_metadata():
     """
@@ -74,13 +75,38 @@ def train(train_args):
         Can be loaded with json.loads() or with yaml.safe_load()    
     """
 
-    run_results = { "status": "Not implemented in the model (train)",
+    run_results = { "status": "ok",
                     "train_args": [],
                     "training": [],
                   }
 
     run_results["train_args"].append(train_args)
 
+    kwargs = {'num_gpus': train_args.n_gpus,
+			   'batch_size': 64,
+			   'optimizer': 'sgd',
+			   'local_parameter_device': 'cpu',
+			   'num_batches': 500,
+			   'variable_update': 'parameter_server',
+			   'log_dir': cfg.DATA_DIR,
+			   'benchmark_log_dir': cfg.DATA_DIR,
+			   'train_dir': cfg.DATA_DIR,
+			   'model': 'alexnet',
+			   'data': 'synthethic'
+			  }
+		
+    params = benchmark.make_params_from_flags()
+#    params = benchmark.make_params(**kwargs)
+
+    #params = benchmark.setup(params)
+    #bench = benchmark.BenchmarkCNN(params)
+
+    #tfversion = cnn_util.tensorflow_version_tuple()
+    #log_fn('TensorFlow:  %i.%i' % (tfversion[0], tfversion[1]))
+
+    #bench.print_info()
+    #bench.run()
+		  
     print(run_results)
     return run_results
 

@@ -7,6 +7,7 @@ from os import path
 
 # identify basedir for the package
 BASE_DIR = path.dirname(path.normpath(path.dirname(__file__)))
+DATA_DIR = /srv/benchmarks_api/data
 
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
@@ -20,15 +21,18 @@ BASE_DIR = path.dirname(path.normpath(path.dirname(__file__)))
 #             'choices': ['value1', 'value2', 'value3'],
 #             'help': 'multi-choice argument',
 #             'required': False
-#             },
-#   'arg3' : {...
-#             },
-# ...
+#             }
 # }
-train_args = { 'arg1': {'default': 1,
-                        'help': '',
+
+train_args = { 'model': {'default': 'resnet50',
+                        'choices': ['resnet50', 'alexnet'],
+                        'help': 'select CNN model for training',
                         'required': False
                         },
+               'n_gpus': {'default': 1,
+                          'help': 'Number of GPUs to train (one node only)',
+                          'required': False
+                          }
 }
 
 # !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
