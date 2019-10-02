@@ -5,10 +5,13 @@ Model description
 
 import argparse
 import pkg_resources
+import yaml
+import json
 # import project's config.py
 import benchmarks_api.config as cfg
 
 import benchmark_cnn as benchmark
+
 
 def get_metadata():
     """
@@ -77,36 +80,59 @@ def train(train_args):
 
     run_results = { "status": "ok",
                     "train_args": [],
-                    "training": [],
+                    "training": []
                   }
-
     run_results["train_args"].append(train_args)
 
-    kwargs = {'num_gpus': train_args.n_gpus,
-			   'batch_size': 64,
-			   'optimizer': 'sgd',
-			   'local_parameter_device': 'cpu',
-			   'num_batches': 500,
-			   'variable_update': 'parameter_server',
-			   'log_dir': cfg.DATA_DIR,
-			   'benchmark_log_dir': cfg.DATA_DIR,
-			   'train_dir': cfg.DATA_DIR,
-			   'model': 'alexnet',
-			   'data': 'synthethic'
-			  }
-		
-    params = benchmark.make_params_from_flags()
-#    params = benchmark.make_params(**kwargs)
+    # Remove possible existing model files
+    for f in os.listdir(cfg.MODEL_DIR):
+        file_path = os.path.join(cfg.MODEL_DIR, f)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+        except Exception as e:
+            print(e)
 
-    #params = benchmark.setup(params)
-    #bench = benchmark.BenchmarkCNN(params)
+    # TODO? Check for cpu/gpu version and adjust data format
+             # 'data_format': 'NHWC',
+    kwargs = {'model': yaml.safe_load(train_args.model),
+              'num_gpus': yaml.safe_load(train_args.num_gpus),
+	      'num_epochs': yaml.safe_load(train_args.num_epochs),
+	      'batch_size': yaml.safe_load(train_args.batch_size),
+	      'optimizer': yaml.safe_load(train_args.optimizer),
+	      'local_parameter_device': 'cpu',
+	      'variable_update': 'parameter_server',
+	     # 'log_dir': cfg.DATA_DIR,
+	      'benchmark_log_dir': cfg.DATA_DIR,
+	      'train_dir': cfg.MODEL_DIR,
+	      }
 
-    #tfversion = cnn_util.tensorflow_version_tuple()
-    #log_fn('TensorFlow:  %i.%i' % (tfversion[0], tfversion[1]))
+    if yaml.safe_load(train_args.dataset) != 'Synthetic data':
+        kwargs['data_name'] = yaml.safe_load(train_args.dataset)
+        # data_dir        
 
-    #bench.print_info()
-    #bench.run()
+    params = benchmark.make_params(**kwargs)
+
+    # TODO check wether paramers fit /catch
+    params = benchmark.setup(params)
+    bench = benchmark.BenchmarkCNN(params)
+
+#    tfversion = cnn_util.tensorflow_version_tuple()
+#    log_fn('TensorFlow:  %i.%i' % (tfversion[0], tfversion[1]))
+
+    bench.print_info()
+    bench.run()
 		  
+    # Read log file and get training results
+    # training results: number of steps, avg img/sec
+    logfile = '{}/metric.log'.format(cfg.DATA_DIR)
+    with open(logfile, "r") as f:
+        for line in f:
+            pass
+        result = json.loads(line)
+        avg_examples = result["average_examples_per_sec"]
+        run_results["training"]["average_examples_per_sec"] = avg_examples
+
     print(run_results)
     return run_results
 
@@ -134,7 +160,6 @@ def get_test_args():
         val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
         if 'choices' in val:
             val['choices'] = [str(item) for item in val['choices']]
-        print(val['default'], type(val['default']))
 
     return predict_args
 
