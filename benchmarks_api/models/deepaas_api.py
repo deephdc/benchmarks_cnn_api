@@ -120,7 +120,7 @@ def train(train_args):
         kwargs['data_dir'] = cfg.DATA_DIR
     
     # If model is ResNet, chose the right number of layers
-    if kwargs['model'] == 'ResNet':
+    if kwargs['model'] == 'resnet':
         if kwargs['data_name'] == 'cifar10':
             kwargs['model'] = 'resnet56'
         else:
@@ -131,7 +131,7 @@ def train(train_args):
     if not gpu:
         kwargs['data_format'] = 'NHWC'
     else:
-        print("GPU-Mode")
+        kwargs['data_format'] = 'NCHW'
    
     run_results["train_args"]["local_parameter_device"] = "cpu"  
     run_results["train_args"]["variable_update"] = "parameter_sever"
@@ -159,9 +159,53 @@ def train(train_args):
         for line in f:
             pass
         result = json.loads(line)
-        print(result)
         avg_examples = result["value"]
         run_results["training"]["average_examples_per_sec"] = avg_examples
+
+
+
+    ### Perform evaluation if set true
+    if yaml.safe_load(train_args.evaluation):
+        run_results["evaluation"] = {}
+
+        kwargs_eval = {'model': kwargs['model'],
+                       'num_gpus': kwargs['num_gpus'],
+                       'data_format': kwargs['data_format'],
+                       'benchmark_log_dir': kwargs['benchmark_log_dir'],
+                       'train_dir': kwargs['train_dir'],
+                       'eval': True
+                       #'eval_dir': cfg.DATA_DIR,
+                       #'benchmark_test_id': asdf,
+                      }
+    
+        # Locate data
+        if yaml.safe_load(train_args.dataset) != 'Synthetic data':
+            kwargs_eval['data_name'] = kwargs['data_name']
+            kwargs_eval['data_dir'] = kwargs['data_dir']
+        
+        # Setup and run the evaluation
+        params_eval = benchmark.make_params(**kwargs_eval)
+        try:
+            params_eval = benchmark.setup(params_eval)
+            evaluation = benchmark.BenchmarkCNN(params_eval)
+        except ValueError as param_ex:
+            raise BadRequest("ValueError: {}".format(param_ex))
+
+        evaluation.print_info()
+        evaluation.run()
+
+        # Read log file and get evaluation results
+        logfile = '{}/metric.log'.format(cfg.DATA_DIR)
+        with open(logfile, "r") as f:
+            for line in f:
+                l = json.loads(line)
+                if l["name"] == "eval_average_examples_per_sec":
+                    run_results["evaluation"]["average_examples_per_sec"] = l["value"]
+                if l["name"] == "eval_top_1_accuracy":
+                    run_results["evaluation"]["top_1_accuracy"] = l["value"]
+                if l["name"] == "eval_top_5_accuracy":
+                    run_results["evaluation"]["top_5_accuracy"] = l["value"]
+        
 
     return run_results
 

@@ -32,7 +32,7 @@ train_args = { 'model': {'default': 'alexnet',
                              'required': False
                             },
                'dataset': {'default': 'Synthetic data',
-                           'choices': ['Synthetic data', 'ImageNet', 'Cifar10'],
+                           'choices': ['Synthetic data', 'imagenet', 'cifar10'],
                            'help': 'Dataset to perform training on. Synthetic \
                             data are ramdomly generated ImageNet-like images.',
                            'required': False
@@ -40,23 +40,15 @@ train_args = { 'model': {'default': 'alexnet',
                'batch_size': {'default': 64,
                               'help':'Batch size for each GPU.',
                               'required': False
+                             },
+               'evaluation': {'default': False,
+                              'choices': [False, True],
+                              'help': 'Perform automated prediction after the \
+                              benchmark in order to get accuracy results (only \
+                              meaningful on real data sets).',
+                              'required': False
                              }
              }
 
 # !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
-predict_args = {'model': {'default': 'alexnet',
-                          'choices': ['alexnet', 'resnet50'],
-                          'help': 'CNN model for training.',
-                          'required': False
-                         },
-               'num_gpus': {'default': 1,
-                            'help': 'Number of GPUs to train (one node only).',
-                            'required': False
-                           },
-               'dataset': {'default': 'Synthetic data',
-                           'choices': ['Synthetic data', 'ImageNet', 'Cifar10'],
-                           'help': 'Dataset to perform training on. Synthetic \
-                            data are ramdomly generated ImageNet-like images.',
-                           'required': False
-                          }
-               }
+predict_args = {}
