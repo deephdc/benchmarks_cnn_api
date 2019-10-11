@@ -11,10 +11,10 @@ DATA_DIR = '/srv/benchmarks_api/data'
 MODEL_DIR = '/srv/benchmarks_api/models'
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
-train_args = { 'model': {'default': 'Alexnet',
-                        'choices': ['Alexnet', 'ResNet'],
-                        'help': 'CNN model for training. ResNet model is chosen
-                        according to dataset (ImageNet - ResNet50, Cifar10 -
+train_args = { 'model': {'default': 'alexnet',
+                        'choices': ['alexnet', 'resnet'],
+                        'help': 'CNN model for training. ResNet model is chosen \
+                        according to dataset (ImageNet - ResNet50, Cifar10 - \
                         ResNet56).',
                         'required': False
                         },

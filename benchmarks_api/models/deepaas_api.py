@@ -9,9 +9,13 @@ import yaml
 import json
 import os
 import tensorflow.test
+
+from werkzeug.exceptions import BadRequest
+
 # import project's config.py
 import benchmarks_api.config as cfg
 import benchmark_cnn as benchmark
+import cnn_util
 
 
 def get_metadata():
@@ -80,10 +84,10 @@ def train(train_args):
     """
 
     run_results = { "status": "ok",
-                    "train_args": [],
-                    "training": []
+                    "train_args": {},
+                    "training": {}
                   }
-    run_results["train_args"].append(train_args)
+    run_results["train_args"] = train_args
 
 
     # Remove possible existing model files
@@ -102,8 +106,8 @@ def train(train_args):
 	      'optimizer': yaml.safe_load(train_args.optimizer),
 	      'local_parameter_device': 'cpu',
 	      'variable_update': 'parameter_server',
-	      'train_dir': cfg.MODEL_DIR,
-	      'benchmark_log_dir': cfg.DATA_DIR,
+              'train_dir' : cfg.MODEL_DIR,
+              'benchmark_log_dir' : cfg.DATA_DIR
               #'benchmark_test_id': asdf,
 	      #'log_dir': cfg.DATA_DIR,
 	      }
@@ -119,7 +123,7 @@ def train(train_args):
     if kwargs['model'] == 'ResNet':
         if kwargs['data_name'] == 'cifar10':
             kwargs['model'] = 'resnet56'
-        else
+        else:
             kwargs['model'] = 'resnet50'
     
     # Check if a gpu is available, if not use cpu data format
@@ -129,30 +133,36 @@ def train(train_args):
     else:
         print("GPU-Mode")
    
+    run_results["train_args"]["local_parameter_device"] = "cpu"  
+    run_results["train_args"]["variable_update"] = "parameter_sever"
+    run_results["train_args"]["model"] = kwargs['model']  
+
     params = benchmark.make_params(**kwargs)
 
 
-    # TODO check wether paramers fit /catch
-    params = benchmark.setup(params)
-    bench = benchmark.BenchmarkCNN(params)
+    # Setup and run the benchmark model
+    try:
+        params = benchmark.setup(params)
+        bench = benchmark.BenchmarkCNN(params)
+    except ValueError as param_ex:
+        raise BadRequest("ValueError: {}".format(param_ex))
 
-#    tfversion = cnn_util.tensorflow_version_tuple()
-#    log_fn('TensorFlow:  %i.%i' % (tfversion[0], tfversion[1]))
+    tfversion = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
+    run_results["training"]["tf_version"] = tfversion
 
     bench.print_info()
     bench.run()
 		  
     # Read log file and get training results
-    # training results: number of steps, avg img/sec
     logfile = '{}/metric.log'.format(cfg.DATA_DIR)
     with open(logfile, "r") as f:
         for line in f:
             pass
         result = json.loads(line)
-        avg_examples = result["average_examples_per_sec"]
+        print(result)
+        avg_examples = result["value"]
         run_results["training"]["average_examples_per_sec"] = avg_examples
 
-    print(run_results)
     return run_results
 
 
