@@ -38,7 +38,7 @@ def get_metadata():
 
     for line in pkg.get_metadata_lines("PKG-INFO"):
         for par in meta:
-            if line.startswith(par+":"):
+            if line.startswith(par + ":"):
                 _, value = line.split(": ", 1)
                 meta[par] = value
 
@@ -73,8 +73,8 @@ def predict_url(*args):
 # Uncomment the following two lines
 # if you allow only authorized people to do training
 ###
-#import flaat
-#@flaat.login_required()
+# import flaat
+# @flaat.login_required()
 def train(train_args):
     """
     Train network
@@ -83,12 +83,11 @@ def train(train_args):
         Can be loaded with json.loads() or with yaml.safe_load()    
     """
 
-    run_results = { "status": "ok",
-                    "train_args": {},
-                    "training": {}
-                  }
+    run_results = {"status": "ok",
+                   "train_args": {},
+                   "training": {}
+                   }
     run_results["train_args"] = train_args
-
 
     # Remove possible existing model files
     for f in os.listdir(cfg.MODEL_DIR):
@@ -101,16 +100,16 @@ def train(train_args):
 
     kwargs = {'model': yaml.safe_load(train_args.model),
               'num_gpus': yaml.safe_load(train_args.num_gpus),
-	      'num_epochs': yaml.safe_load(train_args.num_epochs),
-	      'batch_size': yaml.safe_load(train_args.batch_size),
-	      'optimizer': yaml.safe_load(train_args.optimizer),
-	      'local_parameter_device': 'cpu',
-	      'variable_update': 'parameter_server',
-              'train_dir' : cfg.MODEL_DIR,
-              'benchmark_log_dir' : cfg.DATA_DIR
-              #'benchmark_test_id': asdf,
-	      #'log_dir': cfg.DATA_DIR,
-	      }
+              'num_epochs': yaml.safe_load(train_args.num_epochs),
+              'batch_size': yaml.safe_load(train_args.batch_size),
+              'optimizer': yaml.safe_load(train_args.optimizer),
+              'local_parameter_device': 'cpu',
+              'variable_update': 'parameter_server',
+              'train_dir': cfg.MODEL_DIR,
+              'benchmark_log_dir': cfg.DATA_DIR
+              # 'benchmark_test_id': asdf,
+              # 'log_dir': cfg.DATA_DIR,
+              }
 
     # TODO output directory
 
@@ -118,27 +117,26 @@ def train(train_args):
     if yaml.safe_load(train_args.dataset) != 'Synthetic data':
         kwargs['data_name'] = yaml.safe_load(train_args.dataset)
         kwargs['data_dir'] = cfg.DATA_DIR
-    
+
     # If model is ResNet, chose the right number of layers
     if kwargs['model'] == 'resnet':
         if kwargs['data_name'] == 'cifar10':
             kwargs['model'] = 'resnet56'
         else:
             kwargs['model'] = 'resnet50'
-    
+
     # Check if a gpu is available, if not use cpu data format
     gpu = tensorflow.test.gpu_device_name()
     if not gpu:
         kwargs['data_format'] = 'NHWC'
     else:
         kwargs['data_format'] = 'NCHW'
-   
-    run_results["train_args"]["local_parameter_device"] = "cpu"  
+
+    run_results["train_args"]["local_parameter_device"] = "cpu"
     run_results["train_args"]["variable_update"] = "parameter_sever"
-    run_results["train_args"]["model"] = kwargs['model']  
+    run_results["train_args"]["model"] = kwargs['model']
 
     params = benchmark.make_params(**kwargs)
-
 
     # Setup and run the benchmark model
     try:
@@ -152,7 +150,7 @@ def train(train_args):
 
     bench.print_info()
     bench.run()
-		  
+
     # Read log file and get training results
     logfile = '{}/metric.log'.format(cfg.DATA_DIR)
     with open(logfile, "r") as f:
@@ -161,8 +159,6 @@ def train(train_args):
         result = json.loads(line)
         avg_examples = result["value"]
         run_results["training"]["average_examples_per_sec"] = avg_examples
-
-
 
     ### Perform evaluation if set true
     if yaml.safe_load(train_args.evaluation):
@@ -174,15 +170,15 @@ def train(train_args):
                        'benchmark_log_dir': kwargs['benchmark_log_dir'],
                        'train_dir': kwargs['train_dir'],
                        'eval': True
-                       #'eval_dir': cfg.DATA_DIR,
-                       #'benchmark_test_id': asdf,
-                      }
-    
+                       # 'eval_dir': cfg.DATA_DIR,
+                       # 'benchmark_test_id': asdf,
+                       }
+
         # Locate data
         if yaml.safe_load(train_args.dataset) != 'Synthetic data':
             kwargs_eval['data_name'] = kwargs['data_name']
             kwargs_eval['data_dir'] = kwargs['data_dir']
-        
+
         # Setup and run the evaluation
         params_eval = benchmark.make_params(**kwargs_eval)
         try:
@@ -205,7 +201,6 @@ def train(train_args):
                     run_results["evaluation"]["top_1_accuracy"] = l["value"]
                 if l["name"] == "eval_top_5_accuracy":
                     run_results["evaluation"]["top_5_accuracy"] = l["value"]
-        
 
     return run_results
 
@@ -218,11 +213,12 @@ def get_train_args():
 
     # convert default values and possible 'choices' into strings
     for key, val in train_args.items():
-        val['default'] = str(val['default']) #yaml.safe_dump(val['default']) #json.dumps(val['default'])
+        val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
         if 'choices' in val:
             val['choices'] = [str(item) for item in val['choices']]
 
     return train_args
+
 
 # !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
 def get_test_args():
@@ -236,7 +232,8 @@ def get_test_args():
 
     return predict_args
 
-# during development it might be practical 
+
+# during development it might be practical
 # to check your code from the command line
 def main():
     """
@@ -245,7 +242,7 @@ def main():
     """
 
     if args.method == 'get_metadata':
-        get_metadata()       
+        get_metadata()
     elif args.method == 'train':
         train(args)
     else:
