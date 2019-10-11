@@ -7,9 +7,10 @@ import argparse
 import pkg_resources
 import yaml
 import json
+import os
+import tensorflow.test
 # import project's config.py
 import benchmarks_api.config as cfg
-
 import benchmark_cnn as benchmark
 
 
@@ -84,6 +85,7 @@ def train(train_args):
                   }
     run_results["train_args"].append(train_args)
 
+
     # Remove possible existing model files
     for f in os.listdir(cfg.MODEL_DIR):
         file_path = os.path.join(cfg.MODEL_DIR, f)
@@ -93,8 +95,6 @@ def train(train_args):
         except Exception as e:
             print(e)
 
-    # TODO? Check for cpu/gpu version and adjust data format
-             # 'data_format': 'NHWC',
     kwargs = {'model': yaml.safe_load(train_args.model),
               'num_gpus': yaml.safe_load(train_args.num_gpus),
 	      'num_epochs': yaml.safe_load(train_args.num_epochs),
@@ -102,16 +102,35 @@ def train(train_args):
 	      'optimizer': yaml.safe_load(train_args.optimizer),
 	      'local_parameter_device': 'cpu',
 	      'variable_update': 'parameter_server',
-	     # 'log_dir': cfg.DATA_DIR,
-	      'benchmark_log_dir': cfg.DATA_DIR,
 	      'train_dir': cfg.MODEL_DIR,
+	      'benchmark_log_dir': cfg.DATA_DIR,
+              #'benchmark_test_id': asdf,
+	      #'log_dir': cfg.DATA_DIR,
 	      }
 
+    # TODO output directory
+
+    # Locate training data
     if yaml.safe_load(train_args.dataset) != 'Synthetic data':
         kwargs['data_name'] = yaml.safe_load(train_args.dataset)
-        # data_dir        
-
+        kwargs['data_dir'] = cfg.DATA_DIR
+    
+    # If model is ResNet, chose the right number of layers
+    if kwargs['model'] == 'ResNet':
+        if kwargs['data_name'] == 'cifar10':
+            kwargs['model'] = 'resnet56'
+        else
+            kwargs['model'] = 'resnet50'
+    
+    # Check if a gpu is available, if not use cpu data format
+    gpu = tensorflow.test.gpu_device_name()
+    if not gpu:
+        kwargs['data_format'] = 'NHWC'
+    else:
+        print("GPU-Mode")
+   
     params = benchmark.make_params(**kwargs)
+
 
     # TODO check wether paramers fit /catch
     params = benchmark.setup(params)
