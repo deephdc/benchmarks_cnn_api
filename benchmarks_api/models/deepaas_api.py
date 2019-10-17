@@ -120,7 +120,9 @@ def train(train_args):
 
     # If model is ResNet, chose the right number of layers
     if kwargs['model'] == 'resnet':
-        if kwargs['data_name'] == 'cifar10':
+        if 'data_name' not in kwargs:
+            kwargs['model'] = 'resnet50'
+        elif kwargs['data_name'] == 'cifar10':
             kwargs['model'] = 'resnet56'
         else:
             kwargs['model'] = 'resnet50'
