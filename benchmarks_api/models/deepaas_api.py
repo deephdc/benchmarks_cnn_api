@@ -86,6 +86,7 @@ def train(train_args):
         Can be loaded with json.loads() or with yaml.safe_load()    
     """
 
+    print(os.listdir('./benchmarks_api/benchmarks_api/models/'))
     run_results = {"status": "ok",
                    "train_args": {},
                    "training": {}
