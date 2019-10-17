@@ -99,6 +99,10 @@ def train(train_args):
                 os.unlink(file_path)
         except Exception as e:
             print(e)
+    # Remove possible existing old metric file
+    if os.path.isfile('{}/metric.log'):
+        os.unlink('{}/metric.log'.format(cfg.DATA_DIR))
+
 
     kwargs = {'model': yaml.safe_load(train_args.model),
               'num_gpus': yaml.safe_load(train_args.num_gpus),
@@ -110,8 +114,6 @@ def train(train_args):
               # 'benchmark_test_id': asdf,
               # 'log_dir': cfg.DATA_DIR,
               }
-
-    # TODO output directory
 
     # Locate training data
     if yaml.safe_load(train_args.dataset) != 'Synthetic data':
@@ -127,7 +129,7 @@ def train(train_args):
         else:
             kwargs['model'] = 'resnet50'
 
-    # Check if a gpu is available, if not use cpu data format
+    # If no GPU is available or the gpu option is set to 0 run CPU mode
     if num_local_gpus == 0 or kwargs['num_gpus'] == 0:
         kwargs['device'] = 'cpu'
         kwargs['data_format'] = 'NHWC'  # cpu data format
@@ -137,13 +139,12 @@ def train(train_args):
         kwargs['data_format'] = 'NCHW'
 
 
-    # Save training args but not directories
+    # Return training args as result but not directories
     run_results["train_args"] = kwargs
     kwargs['train_dir'] = cfg.MODEL_DIR
     kwargs['benchmark_log_dir'] = cfg.DATA_DIR
 
     params = benchmark.make_params(**kwargs)
-
 
     # Setup and run the benchmark model
     try:
