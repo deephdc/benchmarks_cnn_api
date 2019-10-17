@@ -20,11 +20,11 @@ train_args = { 'model': {'default': 'alexnet',
                         'required': True
                         },
                'num_gpus': {'default': 1,
-                          'help': 'Number of GPUs to train (one node only). If zero, cpu is used',
-                          'required': True
+                          'help': 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
+                          'required': True,
                            },
                'num_epochs': {'default': 5.0,
-                              'help': 'Number of epochs to train on (float value. < 1.0 allowed).',
+                              'help': 'Number of epochs to train on (float value, < 1.0 allowed).',
                               'required': False
                              },
                'optimizer': {'default': 'sgd',
