@@ -9,7 +9,6 @@ from os import path
 BASE_DIR = path.dirname(path.normpath(path.dirname(__file__)))
 DATA_DIR = '/srv/benchmarks_api/data'
 MODEL_DIR = '/srv/benchmarks_api/models'
-BENCHMARK_DIR = '/srv/tf_cnn_benchmarks'
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
 train_args = { 'model': {'default': 'alexnet',
