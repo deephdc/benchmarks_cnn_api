@@ -8,22 +8,24 @@ import pkg_resources
 import yaml
 import json
 import os
+import datetime
+import requests
+
 from tensorflow.python.client import device_lib
-
 from werkzeug.exceptions import BadRequest
-
 # import project's config.py
 import benchmarks_api.config as cfg
 import benchmark_cnn as benchmark
 import cnn_util
 
-
+# Info on available GPUs
 local_gpus = []
 num_local_gpus = 0
-
 # Available models for the data sets
 models_cifar10 = ('alexnet', 'resnet56', 'resnet110')
 models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 'vgg19', 'googlenet', 'overfeat', 'inception3')
+
+time_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'  # Timeformat of tf-benchmark
 
 
 def get_metadata():
@@ -128,6 +130,19 @@ def train(train_args):
     else:
         verify_selected_model(kwargs['model'], 'imagenet')
 
+    # TODO: if cifar 10 is selected check, if it is mounted, else try to download it
+    """cifar10_local = False
+    if not cifar10_local:
+        response = requests.get('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', stream=True)
+        if response.status_code == 200:
+            #with open(cfg.DATA_DIR, 'wb') as f:
+            with open('/srv/benchmarks_api/data/test', 'wb') as f:
+                f.write(response.raw.read())
+        else:
+            raise BadRequest('No local Cifar10 data set provided.\
+                  But could not retrieve Cifar10 Data from "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"!')
+"""
+
     # If no GPU is available or the gpu option is set to 0 run CPU mode
     if num_local_gpus == 0 or kwargs['num_gpus'] == 0:
         kwargs['device'] = 'cpu'
@@ -140,10 +155,13 @@ def train(train_args):
 
     # Append training info to run_result but not directories
     run_results["training"].update(kwargs)
+    if run_results["training"]["device"] == "cpu":
+        del run_results["training"]["num_gpus"]  # avoid misleading info
     kwargs['train_dir'] = cfg.MODEL_DIR
     kwargs['benchmark_log_dir'] = cfg.MODEL_DIR
 
     params = benchmark.make_params(**kwargs)
+
 
     # Setup and run the benchmark model
     try:
@@ -155,10 +173,14 @@ def train(train_args):
     tfversion = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
     run_results["training"]["tf_version"] = tfversion
 
+    # Run benchmark and measure total execution time
     bench.print_info()
+    start_time_global = datetime.datetime.now().strftime(time_fmt)
     bench.run()
+    end_time_global = datetime.datetime.now().strftime(time_fmt)
 
-    # Read log files and get training results
+
+    # Read training and metric log files and get training results
     os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/training.log'.format(cfg.MODEL_DIR))
     training_file = '{}/training.log'.format(cfg.MODEL_DIR)
     run_parameters, machine_config = parse_logfile_training(training_file)
@@ -166,13 +188,13 @@ def train(train_args):
     run_results["machine_config"] = machine_config
 
     metric_file = '{}/metric.log'.format(cfg.MODEL_DIR)
-    with open(metric_file, "r") as f:
-        for line in f:
-            pass
-        result = json.loads(line)
-        avg_examples = result["value"]
-        run_results["training"]["result"] = {"average_examples_per_sec": avg_examples
-                                             }
+    run_results['training']['result'] = {}
+    run_results['training']['result']['global_start_time'] = start_time_global
+    run_results['training']['result']['global_end_time'] = end_time_global
+    start, end, avg_examples = parse_metric_file(metric_file)
+    run_results["training"]["result"]["average_examples_per_sec"] = avg_examples
+    run_results['training']['result']['execution_start_time'] = start
+    run_results['training']['result']['execution_end_time'] = end
 
 
     ## Evaluation ##
@@ -188,6 +210,9 @@ def train(train_args):
                        'eval': True
                        # 'eval_dir': cfg.DATA_DIR,
                        }
+        run_results['evaluation']['device'] = kwargs_eval['device']
+        if run_results['evaluation']['device'] == 'gpu':
+            run_results['evaluation']['num_gpus'] = kwargs_eval['num_gpus']  # only for GPU to avoid confusion
 
         # Locate data
         if yaml.safe_load(train_args.dataset) != 'Synthetic data':
@@ -203,7 +228,10 @@ def train(train_args):
             raise BadRequest("ValueError: {}".format(param_ex))
 
         evaluation.print_info()
+        start_time_global = datetime.datetime.now().strftime(time_fmt)
         evaluation.run()
+        end_time_global = datetime.datetime.now().strftime(time_fmt)
+
 
         # Read log files and get evaluation results
         os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/evaluation.log'.format(cfg.MODEL_DIR))
@@ -213,6 +241,9 @@ def train(train_args):
 
         logfile = '{}/metric.log'.format(cfg.MODEL_DIR)
         run_results['evaluation']['result'] = {}
+        run_results['evaluation']['result']['global_start_time'] = start_time_global
+        run_results['evaluation']['result']['global_end_time'] = end_time_global
+
         with open(logfile, "r") as f:
             for line in f:
                 l = json.loads(line)
@@ -275,10 +306,29 @@ def parse_logfile_evaluation(logFile):
                 run_parameters['num_batches'] = el['long_value']
             if el['name'] == 'data_format':
                 run_parameters['data_format'] = el['string_value']
-            if el['name'] == 'optimizer':
-                run_parameters['optimizer'] = el['string_value']
+            # not sure why evaluation uses optimizer
+            #if el['name'] == 'optimizer':
+            #    run_parameters['optimizer'] = el['string_value']
 
     return run_parameters
+
+
+def parse_metric_file(metric_file):
+    """ takes the metric file and extracts timestamps and avg_imgs / sec info
+    """
+    with open(metric_file, "r") as f:
+        maxStep = 0
+        for line in f:
+            el = json.loads(line)
+            if el['name'] == "current_examples_per_sec" and el['global_step'] == 1:
+                minTime = el['timestamp']
+            if el['name'] == "current_examples_per_sec" and el['global_step'] > maxStep:
+                maxTime = el['timestamp']
+                maxStep = el['global_step']
+            if el['name'] == 'average_examples_per_sec':
+                avg_examples = el['value']
+    return minTime, maxTime, avg_examples
+
 
 
 def get_train_args():
