@@ -87,11 +87,15 @@ def train(train_args):
     """
 
     run_results = {"status": "ok",
-                   "train_args": {},
-                   "training": {}
+                   "user_args": {},
+                   "machine_config": {},
+                   "training": {},
+                   "evaluation": {}
                    }
 
-    # Remove possible existing model files
+    run_results["user_args"] = train_args
+
+    # Remove possible existing model and log files
     for f in os.listdir(cfg.MODEL_DIR):
         file_path = os.path.join(cfg.MODEL_DIR, f)
         try:
@@ -99,19 +103,15 @@ def train(train_args):
                 os.unlink(file_path)
         except Exception as e:
             print(e)
-    # Remove possible existing old metric file
-    if os.path.isfile('{}/metric.log'):
-        os.unlink('{}/metric.log'.format(cfg.DATA_DIR))
 
 
     kwargs = {'model': yaml.safe_load(train_args.model),
               'num_gpus': yaml.safe_load(train_args.num_gpus),
               'num_epochs': yaml.safe_load(train_args.num_epochs),
-              'batch_size': yaml.safe_load(train_args.batch_size),
+              'batch_size': yaml.safe_load(train_args.batch_size_per_device),
               'optimizer': yaml.safe_load(train_args.optimizer),
               'local_parameter_device': 'cpu',
               'variable_update': 'parameter_server',
-              # 'benchmark_test_id': asdf,
               # 'log_dir': cfg.DATA_DIR,
               }
 
@@ -140,9 +140,9 @@ def train(train_args):
 
 
     # Return training args as result but not directories
-    run_results["train_args"] = kwargs
+    run_results["training"] = kwargs
     kwargs['train_dir'] = cfg.MODEL_DIR
-    kwargs['benchmark_log_dir'] = cfg.DATA_DIR
+    kwargs['benchmark_log_dir'] = cfg.MODEL_DIR
 
     params = benchmark.make_params(**kwargs)
 
@@ -160,13 +160,17 @@ def train(train_args):
     bench.run()
 
     # Read log file and get training results
-    logfile = '{}/metric.log'.format(cfg.DATA_DIR)
-    with open(logfile, "r") as f:
+    os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/training.log'.format(cfg.MODEL_DIR))
+    benchmark_file = '{}/training.log'.format(cfg.MODEL_DIR)
+    run_results["machine_config"] = parse_benchmark_file(benchmark_file)
+
+    log_file = '{}/metric.log'.format(cfg.MODEL_DIR)
+    with open(log_file, "r") as f:
         for line in f:
             pass
         result = json.loads(line)
         avg_examples = result["value"]
-        run_results["training"]["average_examples_per_sec"] = avg_examples
+        run_results["training"]["result"] = {"average_examples_per_sec": avg_examples}
 
 
 
@@ -202,7 +206,8 @@ def train(train_args):
         evaluation.run()
 
         # Read log file and get evaluation results
-        logfile = '{}/metric.log'.format(cfg.DATA_DIR)
+        os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/evaluation.log'.format(cfg.MODEL_DIR))
+        logfile = '{}/metric.log'.format(cfg.MODEL_DIR)
         with open(logfile, "r") as f:
             for line in f:
                 l = json.loads(line)
@@ -213,7 +218,20 @@ def train(train_args):
                 if l["name"] == "eval_top_5_accuracy":
                     run_results["evaluation"]["top_5_accuracy"] = l["value"]
 
+    print(run_results)
     return run_results
+
+
+def parse_benchmark_file(benchmarkFile):
+    """ takes log file with benchmark data in JSON format
+        and parses necessary parts to identify benchmark run
+    """
+    benchParams = {}
+    with open(benchmarkFile, "r") as read_file:
+        jsonData = json.load(read_file)  # dictionary
+        benchParams["machine_config"] = jsonData["machine_config"]
+
+    return benchParams
 
 
 def get_train_args():
