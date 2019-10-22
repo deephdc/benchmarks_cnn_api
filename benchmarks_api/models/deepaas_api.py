@@ -21,6 +21,11 @@ import cnn_util
 local_gpus = []
 num_local_gpus = 0
 
+# Available models for the data sets
+models_cifar10 = ('alexnet', 'resnet56', 'resnet110')
+models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 'vgg19', 'googlenet', 'overfeat', 'inception3')
+
+
 def get_metadata():
     """
     Function to read metadata
@@ -104,33 +109,24 @@ def train(train_args):
         except Exception as e:
             print(e)
 
-
     # Load arguments
-    kwargs = {'model': yaml.safe_load(train_args.model),
+    kwargs = {'model': yaml.safe_load(train_args.model).split(' ')[0],
               'num_gpus': yaml.safe_load(train_args.num_gpus),
               'num_epochs': yaml.safe_load(train_args.num_epochs),
               'batch_size': yaml.safe_load(train_args.batch_size_per_device),
               'optimizer': yaml.safe_load(train_args.optimizer),
               'local_parameter_device': 'cpu',
-              'variable_update': 'parameter_server',
+              'variable_update': 'parameter_server'
               # 'log_dir': cfg.DATA_DIR,
               }
 
-    # Locate training data
+    # Locate training data and check if the selected network fits the
     if yaml.safe_load(train_args.dataset) != 'Synthetic data':
         kwargs['data_name'] = yaml.safe_load(train_args.dataset)
         kwargs['data_dir'] = cfg.DATA_DIR
+        verify_selected_model(kwargs['model'], kwargs['data_name'])
     else:
-        run_results['training']['data_name'] = 'synthetic'
-
-    # If model is ResNet, chose the right number of layers
-    if kwargs['model'] == 'resnet':
-        if 'data_name' not in kwargs:
-            kwargs['model'] = 'resnet50'
-        elif kwargs['data_name'] == 'cifar10':
-            kwargs['model'] = 'resnet56'
-        else:
-            kwargs['model'] = 'resnet50'
+        verify_selected_model(kwargs['model'], 'imagenet')
 
     # If no GPU is available or the gpu option is set to 0 run CPU mode
     if num_local_gpus == 0 or kwargs['num_gpus'] == 0:
@@ -142,7 +138,7 @@ def train(train_args):
         kwargs['data_format'] = 'NCHW'
 
 
-    # Safe and append training info to run_result but not directories
+    # Append training info to run_result but not directories
     run_results["training"].update(kwargs)
     kwargs['train_dir'] = cfg.MODEL_DIR
     kwargs['benchmark_log_dir'] = cfg.MODEL_DIR
@@ -175,8 +171,8 @@ def train(train_args):
             pass
         result = json.loads(line)
         avg_examples = result["value"]
-        run_results["training"]["result"] = {"average_examples_per_sec": avg_examples}
-
+        run_results["training"]["result"] = {"average_examples_per_sec": avg_examples
+                                             }
 
 
     ## Evaluation ##
@@ -191,7 +187,6 @@ def train(train_args):
                        'train_dir': kwargs['train_dir'],
                        'eval': True
                        # 'eval_dir': cfg.DATA_DIR,
-                       # 'benchmark_test_id': asdf,
                        }
 
         # Locate data
@@ -228,8 +223,18 @@ def train(train_args):
                 if l["name"] == "eval_top_5_accuracy":
                     run_results["evaluation"]['result']["top_5_accuracy"] = l["value"]
 
-    print(run_results)
     return run_results
+
+
+def verify_selected_model(model, data_set):
+    if data_set == 'cifar10':
+        if model not in models_cifar10:
+            raise BadRequest('Unsupported model selected! Cifar10 data set supported models are: {}'
+                             .format(models_cifar10))
+    if data_set == 'imagenet':
+        if model not in models_imagenet:
+            raise BadRequest('Unsupported model selected! ImageNet data set supported models are: {}'
+                             .format(models_imagenet))
 
 
 def parse_logfile_training(logFile):
