@@ -105,6 +105,7 @@ def train(train_args):
             print(e)
 
 
+    # Load arguments
     kwargs = {'model': yaml.safe_load(train_args.model),
               'num_gpus': yaml.safe_load(train_args.num_gpus),
               'num_epochs': yaml.safe_load(train_args.num_epochs),
@@ -119,6 +120,8 @@ def train(train_args):
     if yaml.safe_load(train_args.dataset) != 'Synthetic data':
         kwargs['data_name'] = yaml.safe_load(train_args.dataset)
         kwargs['data_dir'] = cfg.DATA_DIR
+    else:
+        run_results['training']['data_name'] = 'synthetic'
 
     # If model is ResNet, chose the right number of layers
     if kwargs['model'] == 'resnet':
@@ -139,8 +142,8 @@ def train(train_args):
         kwargs['data_format'] = 'NCHW'
 
 
-    # Return training args as result but not directories
-    run_results["training"] = kwargs
+    # Safe and append training info to run_result but not directories
+    run_results["training"].update(kwargs)
     kwargs['train_dir'] = cfg.MODEL_DIR
     kwargs['benchmark_log_dir'] = cfg.MODEL_DIR
 
@@ -159,13 +162,15 @@ def train(train_args):
     bench.print_info()
     bench.run()
 
-    # Read log file and get training results
+    # Read log files and get training results
     os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/training.log'.format(cfg.MODEL_DIR))
-    benchmark_file = '{}/training.log'.format(cfg.MODEL_DIR)
-    run_results["machine_config"] = parse_benchmark_file(benchmark_file)
+    training_file = '{}/training.log'.format(cfg.MODEL_DIR)
+    run_parameters, machine_config = parse_logfile_training(training_file)
+    run_results['training'].update(run_parameters)
+    run_results["machine_config"] = machine_config
 
-    log_file = '{}/metric.log'.format(cfg.MODEL_DIR)
-    with open(log_file, "r") as f:
+    metric_file = '{}/metric.log'.format(cfg.MODEL_DIR)
+    with open(metric_file, "r") as f:
         for line in f:
             pass
         result = json.loads(line)
@@ -205,33 +210,70 @@ def train(train_args):
         evaluation.print_info()
         evaluation.run()
 
-        # Read log file and get evaluation results
+        # Read log files and get evaluation results
         os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/evaluation.log'.format(cfg.MODEL_DIR))
+        evaluation_file = '{}/evaluation.log'.format(cfg.MODEL_DIR)
+        run_parameters = parse_logfile_evaluation(evaluation_file)
+        run_results['evaluation'].update(run_parameters)
+
         logfile = '{}/metric.log'.format(cfg.MODEL_DIR)
+        run_results['evaluation']['result'] = {}
         with open(logfile, "r") as f:
             for line in f:
                 l = json.loads(line)
                 if l["name"] == "eval_average_examples_per_sec":
-                    run_results["evaluation"]["average_examples_per_sec"] = l["value"]
+                    run_results["evaluation"]['result']["average_examples_per_sec"] = l["value"]
                 if l["name"] == "eval_top_1_accuracy":
-                    run_results["evaluation"]["top_1_accuracy"] = l["value"]
+                    run_results["evaluation"]['result']["top_1_accuracy"] = l["value"]
                 if l["name"] == "eval_top_5_accuracy":
-                    run_results["evaluation"]["top_5_accuracy"] = l["value"]
+                    run_results["evaluation"]['result']["top_5_accuracy"] = l["value"]
 
     print(run_results)
     return run_results
 
 
-def parse_benchmark_file(benchmarkFile):
-    """ takes log file with benchmark data in JSON format
-        and parses necessary parts to identify benchmark run
+def parse_logfile_training(logFile):
+    """ takes log file with benchmark settings in JSON format
+        and parses relevant parts
     """
-    benchParams = {}
-    with open(benchmarkFile, "r") as read_file:
-        jsonData = json.load(read_file)  # dictionary
-        benchParams["machine_config"] = jsonData["machine_config"]
+    run_parameters = {}
+    with open(logFile, "r") as read_file:
+        json_data = json.load(read_file)  # dictionary
 
-    return benchParams
+        for el in json_data['run_parameters']:
+            if el['name'] == 'batch_size':
+                run_parameters['batch_size'] = el['long_value']
+            if el['name'] == 'batch_size_per_device':
+                run_parameters['batch_size_per_device'] = el['float_value']
+            if el['name'] == 'num_batches':
+                run_parameters['num_batches'] = el['long_value']
+
+        machine_config = json_data["machine_config"]
+
+    return run_parameters, machine_config
+
+
+def parse_logfile_evaluation(logFile):
+    """ takes log file with evaluation settings in JSON format
+        and parses relevant parts
+    """
+    run_parameters = {}
+    with open(logFile, "r") as read_file:
+        json_data = json.load(read_file)  # dictionary
+
+        for el in json_data['run_parameters']:
+            if el['name'] == 'batch_size':
+                run_parameters['batch_size'] = el['long_value']
+            if el['name'] == 'batch_size_per_device':
+                run_parameters['batch_size_per_device'] = el['float_value']
+            if el['name'] == 'num_batches':
+                run_parameters['num_batches'] = el['long_value']
+            if el['name'] == 'data_format':
+                run_parameters['data_format'] = el['string_value']
+            if el['name'] == 'optimizer':
+                run_parameters['optimizer'] = el['string_value']
+
+    return run_parameters
 
 
 def get_train_args():
