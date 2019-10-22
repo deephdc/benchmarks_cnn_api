@@ -37,7 +37,7 @@ train_args = { 'model': {'default': 'alexnet',
                             data are ramdomly generated ImageNet-like images.',
                            'required': True
                           },
-               'batch_size': {'default': 64,
+               'batch_size_per_device': {'default': 64,
                               'help':'Batch size for each GPU.',
                               'required': False
                              },
