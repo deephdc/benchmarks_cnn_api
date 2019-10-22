@@ -12,15 +12,17 @@ MODEL_DIR = '/srv/benchmarks_api/models'
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
 train_args = { 'model': {'default': 'alexnet',
-                        'choices': ['alexnet', 'resnet'],
-                        'help': 'CNN model for training. ResNet model is chosen \
-                        according to dataset (ImageNet - ResNet50, Cifar10 - \
-                        ResNet56).',
-                        'required': True
+                         'choices': ['googlenet (ImageNet)', 'inception3 (ImageNet)', 'mobilenet (ImageNet)',
+                                     'overfeat (ImageNet)', 'resnet50 (ImageNet)', 'resnet152 (ImageNet)',
+                                     'vgg16 (ImageNet)', 'vgg19 (ImageNet)', 'resnet56 (Cifar10)', 'resnet110 (Cifar10)',
+                                     'alexnet (ImageNet, Cifar10)'],
+                         'help': 'CNN model for training. N.B. Models only support specific data sets, given in \
+                                  brackets. Synthetic data can only be processed by ImageNet models.',
+                         'required': True
                         },
                'num_gpus': {'default': 1,
-                          'help': 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
-                          'required': True,
+                            'help': 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
+                            'required': True,
                            },
                'num_epochs': {'default': 5.0,
                               'help': 'Number of epochs to train on (float value, < 1.0 allowed).',
@@ -29,7 +31,7 @@ train_args = { 'model': {'default': 'alexnet',
                'optimizer': {'default': 'sgd',
                              'choices': ['sgd','momentum','rmsprop','adam'],
                              'help': 'Optimizer to use.',
-                             'required': False
+                             'required': True
                             },
                'dataset': {'default': 'Synthetic data',
                            'choices': ['Synthetic data', 'imagenet', 'cifar10'],
@@ -38,9 +40,9 @@ train_args = { 'model': {'default': 'alexnet',
                            'required': True
                           },
                'batch_size_per_device': {'default': 64,
-                              'help':'Batch size for each GPU.',
-                              'required': False
-                             },
+                                         'help': 'Batch size for each GPU.',
+                                         'required': False
+                                        },
                'evaluation': {'default': True,
                               'choices': [False, True],
                               'help': 'Perform evaluation after the \
