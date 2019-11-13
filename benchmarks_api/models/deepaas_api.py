@@ -9,7 +9,9 @@ import yaml
 import json
 import os
 import datetime
-import requests
+import urllib.request
+import urllib.error
+import tarfile
 
 from tensorflow.python.client import device_lib
 from werkzeug.exceptions import BadRequest
@@ -131,17 +133,8 @@ def train(train_args):
         verify_selected_model(kwargs['model'], 'imagenet')
 
     # TODO: if cifar 10 is selected check, if it is mounted, else try to download it
-    """cifar10_local = False
-    if not cifar10_local:
-        response = requests.get('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', stream=True)
-        if response.status_code == 200:
-            #with open(cfg.DATA_DIR, 'wb') as f:
-            with open('/srv/benchmarks_api/data/test', 'wb') as f:
-                f.write(response.raw.read())
-        else:
-            raise BadRequest('No local Cifar10 data set provided.\
-                  But could not retrieve Cifar10 Data from "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"!')
-"""
+    cifar10_local = load_cifar10()
+    # TODO: if imagenet is selected, check if mounted else error
 
     # If no GPU is available or the gpu option is set to 0 run CPU mode
     if num_local_gpus == 0 or kwargs['num_gpus'] == 0:
@@ -257,11 +250,45 @@ def train(train_args):
     return run_results
 
 
+def load_cifar10():
+    """
+     Check if the necessary Cifar10 files are available locally in the 'data' directory.
+     If not, download them from the official page and extract
+    """
+    cifar10Local = True
+    # Files of the Cifar10 Dataset
+    cifar10_files = ['batches.meta', 'data_batch_1', 'data_batch_2', 'data_batch_3', 'data_batch_4', 'data_batch_5', 'test_batch']
+
+    # Check local availability
+    for f in cifar10_files:
+        if not os.path.exists('{}/{}'.format(cfg.DATA_DIR, f)):
+            cifar10Local = False
+
+    # If not available locally, download to data directory
+    if not cifar10Local:
+        print('No local copy of Cifat10 found. Trying to download frrom: https://www.cs.toronto.edu/~kriz/cifar.html')
+        try:
+            fileName, header = urllib.request.urlretrieve('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', filename='cifar10.tar')
+            print('Extracting tar-archive...')
+            with tarfile.open(name=fileName, mode='r:gz') as tar:
+                tar.extractall(path=cfg.DATA_DIR)
+                os
+            print('Done extracting to {}'.format(cfg.DATA_DIR))
+        except urllib.error.HTTPError as e:
+            raise BadRequest('No local Cifar10 data set provided.\
+            But could not retrieve Cifar10 Data from "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"!')
+
+    return True
+
+
 def verify_selected_model(model, data_set):
+    """
+    Check if the user has selected a model that is compatible with the data set
+    """
     if data_set == 'cifar10':
         if model not in models_cifar10:
             raise BadRequest('Unsupported model selected! Cifar10 data set supported models are: {}'
-                             .format(models_cifar10))
+                         .format(models_cifar10))
     if data_set == 'imagenet':
         if model not in models_imagenet:
             raise BadRequest('Unsupported model selected! ImageNet data set supported models are: {}'
@@ -306,6 +333,8 @@ def parse_logfile_evaluation(logFile):
                 run_parameters['num_batches'] = el['long_value']
             if el['name'] == 'data_format':
                 run_parameters['data_format'] = el['string_value']
+            if el['name'] == 'model':
+                run_parameters['model'] = el['string_value']
             # not sure why evaluation uses optimizer
             #if el['name'] == 'optimizer':
             #    run_parameters['optimizer'] = el['string_value']
@@ -317,7 +346,7 @@ def parse_metric_file(metric_file):
     """ takes the metric file and extracts timestamps and avg_imgs / sec info
     """
     with open(metric_file, "r") as f:
-        maxStep = 0
+        maxStep, minTime, maxTime, avg_examples = 0, 0, 0, 0
         for line in f:
             el = json.loads(line)
             if el['name'] == "current_examples_per_sec" and el['global_step'] == 1:
