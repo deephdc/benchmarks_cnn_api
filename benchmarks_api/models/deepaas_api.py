@@ -8,6 +8,7 @@ import pkg_resources
 import yaml
 import json
 import os
+import shutil
 import datetime
 import urllib.request
 import urllib.error
@@ -95,14 +96,7 @@ def train(train_args):
         Can be loaded with json.loads() or with yaml.safe_load()    
     """
 
-    run_results = {"status": "ok",
-                   "user_args": {},
-                   "machine_config": {},
-                   "training": {},
-                   "evaluation": {}
-                   }
-
-    run_results["user_args"] = train_args
+    run_results = {"status": "ok", "user_args": train_args, "machine_config": {}, "training": {}, "evaluation": {}}
 
     # Remove possible existing model and log files
     for f in os.listdir(cfg.MODEL_DIR):
@@ -113,7 +107,7 @@ def train(train_args):
         except Exception as e:
             print(e)
 
-    # Load arguments
+    # Declare training arguments
     kwargs = {'model': yaml.safe_load(train_args.model).split(' ')[0],
               'num_gpus': yaml.safe_load(train_args.num_gpus),
               'num_epochs': yaml.safe_load(train_args.num_epochs),
@@ -121,20 +115,21 @@ def train(train_args):
               'optimizer': yaml.safe_load(train_args.optimizer),
               'local_parameter_device': 'cpu',
               'variable_update': 'parameter_server'
-              # 'log_dir': cfg.DATA_DIR,
               }
 
-    # Locate training data and check if the selected network fits the
+    # Locate training data and check if the selected network fits it
+    # For real data check whether the right data was mounted to the right place and if not download it (cifar10 only)
     if yaml.safe_load(train_args.dataset) != 'Synthetic data':
-        kwargs['data_name'] = yaml.safe_load(train_args.dataset)
-        kwargs['data_dir'] = cfg.DATA_DIR
-        verify_selected_model(kwargs['model'], kwargs['data_name'])
+        data_name = yaml.safe_load(train_args.dataset)
+        if data_name == 'cifar10':
+            locate_cifar10()
+        if data_name == 'imagenet':
+            locate_imagenet()
+        verify_selected_model(kwargs['model'], data_name)
+        kwargs['data_name'] = data_name
+        kwargs['data_dir'] = '{}/{}'.format(cfg.DATA_DIR, data_name)
     else:
         verify_selected_model(kwargs['model'], 'imagenet')
-
-    # TODO: if cifar 10 is selected check, if it is mounted, else try to download it
-    cifar10_local = load_cifar10()
-    # TODO: if imagenet is selected, check if mounted else error
 
     # If no GPU is available or the gpu option is set to 0 run CPU mode
     if num_local_gpus == 0 or kwargs['num_gpus'] == 0:
@@ -145,26 +140,24 @@ def train(train_args):
         kwargs['device'] = 'gpu'
         kwargs['data_format'] = 'NCHW'
 
-
-    # Append training info to run_result but not directories
+    # Add training info to run_results but not the directories
     run_results["training"].update(kwargs)
     if run_results["training"]["device"] == "cpu":
         del run_results["training"]["num_gpus"]  # avoid misleading info
     kwargs['train_dir'] = cfg.MODEL_DIR
     kwargs['benchmark_log_dir'] = cfg.MODEL_DIR
 
-    params = benchmark.make_params(**kwargs)
-
 
     # Setup and run the benchmark model
+    params = benchmark.make_params(**kwargs)
     try:
         params = benchmark.setup(params)
         bench = benchmark.BenchmarkCNN(params)
     except ValueError as param_ex:
         raise BadRequest("ValueError: {}".format(param_ex))
 
-    tfversion = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
-    run_results["training"]["tf_version"] = tfversion
+    tf_version = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
+    run_results["training"]["tf_version"] = tf_version
 
     # Run benchmark and measure total execution time
     bench.print_info()
@@ -172,10 +165,9 @@ def train(train_args):
     bench.run()
     end_time_global = datetime.datetime.now().strftime(time_fmt)
 
-
-    # Read training and metric log files and get training results
-    os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/training.log'.format(cfg.MODEL_DIR))
+    # Read training and metric log files and store training results
     training_file = '{}/training.log'.format(cfg.MODEL_DIR)
+    os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), training_file)
     run_parameters, machine_config = parse_logfile_training(training_file)
     run_results['training'].update(run_parameters)
     run_results["machine_config"] = machine_config
@@ -250,35 +242,43 @@ def train(train_args):
     return run_results
 
 
-def load_cifar10():
+def locate_cifar10():
     """
      Check if the necessary Cifar10 files are available locally in the 'data' directory.
      If not, download them from the official page and extract
     """
-    cifar10Local = True
     # Files of the Cifar10 Dataset
     cifar10_files = ['batches.meta', 'data_batch_1', 'data_batch_2', 'data_batch_3', 'data_batch_4', 'data_batch_5', 'test_batch']
+    cifar10Local = True
 
     # Check local availability
     for f in cifar10_files:
-        if not os.path.exists('{}/{}'.format(cfg.DATA_DIR, f)):
+        if not os.path.exists('{}/cifar10/{}'.format(cfg.DATA_DIR, f)):
             cifar10Local = False
 
     # If not available locally, download to data directory
     if not cifar10Local:
-        print('No local copy of Cifat10 found. Trying to download frrom: https://www.cs.toronto.edu/~kriz/cifar.html')
+        print('No local copy of Cifar10 found. Trying to download frrom: https://www.cs.toronto.edu/~kriz/cifar.html')
         try:
             fileName, header = urllib.request.urlretrieve('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', filename='cifar10.tar')
             print('Extracting tar-archive...')
             with tarfile.open(name=fileName, mode='r:gz') as tar:
                 tar.extractall(path=cfg.DATA_DIR)
-                os
-            print('Done extracting to {}'.format(cfg.DATA_DIR))
+                rootdir = os.path.commonpath(tar.getnames())
+                for f in os.listdir('{0}/{1}'.format(cfg.DATA_DIR, rootdir)):
+                    shutil.move('{}/{}/{}'.format(cfg.DATA_DIR, rootdir, f), '{}/cifar10'.format(cfg.DATA_DIR))
+            print('Done extracting files to {}/cifar10'.format(cfg.DATA_DIR))
         except urllib.error.HTTPError as e:
-            raise BadRequest('No local Cifar10 data set provided.\
-            But could not retrieve Cifar10 Data from "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"!')
+            raise BadRequest('No local Cifar-10 data set found at /srv/benchmarks_api/data/cifar10/.\
+            But could not retrieve Cifar-10 Data from "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"!')
 
-    return True
+
+def locate_imagenet():
+    """
+    Check if ImageNet is in the required folder
+    """
+    if not os.listdir('{}/imagenet'.format(cfg.DATA_DIR)):
+        raise BadRequest('No local ImageNet data set found at /srv/benchmarks_api/data/imagenet/!')
 
 
 def verify_selected_model(model, data_set):
