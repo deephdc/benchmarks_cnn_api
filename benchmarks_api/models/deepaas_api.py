@@ -154,7 +154,7 @@ def train(train_args):
         params = benchmark.setup(params)
         bench = benchmark.BenchmarkCNN(params)
     except ValueError as param_ex:
-        raise BadRequest("ValueError: {}".format(param_ex))
+        raise BadRequest("ValueError in parameter setup: {}".format(param_ex))
 
     tf_version = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
     run_results["training"]["tf_version"] = tf_version
@@ -162,7 +162,10 @@ def train(train_args):
     # Run benchmark and measure total execution time
     bench.print_info()
     start_time_global = datetime.datetime.now().strftime(time_fmt)
-    bench.run()
+    try:
+        bench.run()
+    except ValueError as ve:
+        raise BadRequest('ValueError in benchmark execution: {}'.format(ve))
     end_time_global = datetime.datetime.now().strftime(time_fmt)
 
     # Read training and metric log files and store training results
