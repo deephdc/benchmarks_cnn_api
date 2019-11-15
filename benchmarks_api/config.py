@@ -11,7 +11,7 @@ DATA_DIR = '/srv/benchmarks_api/data'
 MODEL_DIR = '/srv/benchmarks_api/models'
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
-train_args = { 'model': {'default': 'alexnet',
+train_args = { 'model': {'default': 'alexnet (ImageNet, Cifar10)',
                          'choices': ['googlenet (ImageNet)', 'inception3 (ImageNet)', 'mobilenet (ImageNet)',
                                      'overfeat (ImageNet)', 'resnet50 (ImageNet)', 'resnet152 (ImageNet)',
                                      'vgg16 (ImageNet)', 'vgg19 (ImageNet)', 'resnet56 (Cifar10)', 'resnet110 (Cifar10)',
