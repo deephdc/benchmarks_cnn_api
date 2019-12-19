@@ -1,10 +1,11 @@
 DEEP Open Catalogue: API for Tensorflow Benchmarks
 ==============================
 
-[![Build Status](https://jenkins.indigo-datacloud.eu:8080/buildStatus/icon?job=Pipeline-as-code/DEEP-OC-org/benchmarks_api/test)](https://jenkins.indigo-datacloud.eu:8080/job/Pipeline-as-code/job/DEEP-OC-org/job/benchmarks_api/job/test)
+[![Build Status](https://jenkins.indigo-datacloud.eu/buildStatus/icon?job=Pipeline-as-code/DEEP-OC-org/benchmarks_api/test)](https://jenkins.indigo-datacloud.eu:8080/job/Pipeline-as-code/job/DEEP-OC-org/job/benchmarks_api/job/test)
 
-tf_cnn_benchmarks packed with DEEPaaS API.
+[tf_cnn_benchmarks](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) from TensorFlow team accessed via [DEEPaaS API](https://github.com/indigo-dc/DEEPaaS), currently V1.
 
+## From [tf_cnn_benchmarks](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks):
 tf_cnn_benchmarks contains implementations of several popular convolutional
 models, and is designed to be as fast as possible. tf_cnn_benchmarks supports
 both running on a single machine or running in distributed mode across multiple
@@ -14,7 +15,7 @@ information.
 
 These models utilize many of the strategies in the [TensorFlow Performance
 Guide](https://www.tensorflow.org/performance/performance_guide). Benchmark
-results can be found [here](https://www.tensorflow.org/performance/benchmarks).
+results can be found [here](https://github.com/tensorflow/docs/blob/master/site/en/r1/guide/performance/benchmarks.md).
 
 These models are designed for performance. For models that have clean and
 easy-to-read implementations, see the [TensorFlow Official
@@ -29,8 +30,6 @@ Models](https://github.com/tensorflow/models/tree/master/official).
     │   └── raw                <- The original, immutable data dump.
     │
     ├── docs                   <- A default Sphinx project; see sphinx-doc.org for details
-    │
-    ├── docker                 <- Directory for Dockerfile(s) for development
     │
     ├── models                 <- Trained and serialized models, model predictions, or model summaries
     │
@@ -49,7 +48,7 @@ Models](https://github.com/tensorflow/models/tree/master/official).
     ├── test-requirements.txt  <- The requirements file for the test environment
     │
     ├── setup.py               <- makes project pip installable (pip install -e .) so benchmarks_api can be imported
-    ├── benchmarks_api    <- Source code for use in this project.
+    ├── benchmarks_cnn_api    <- Source code for use in this project.
     │   ├── __init__.py        <- Makes benchmarks_api a Python module
     │   │
     │   ├── dataset            <- Scripts to download or generate data
