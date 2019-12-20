@@ -12,8 +12,8 @@ pipeline {
     environment {
         author_name = "A.Grupp, V.Kozlov (KIT)"
         author_email = "valentin.kozlov@kit.edu"
-        app_name = "benchmarks_api"
-        job_location = "Pipeline-as-code/DEEP-OC-org/DEEP-OC-benchmarks_api/${env.BRANCH_NAME}"
+        app_name = "benchmarks_cnn"
+        job_location = "Pipeline-as-code/DEEP-OC-org/DEEP-OC-benchmarks_cnn/${env.BRANCH_NAME}"
     }
 
     stages {

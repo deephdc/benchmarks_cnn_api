@@ -11,5 +11,5 @@ testtools>=1.4.0
 pytest
 pytest-cov
 
-deepaas
+deepaas==0.5.1
 flaat
