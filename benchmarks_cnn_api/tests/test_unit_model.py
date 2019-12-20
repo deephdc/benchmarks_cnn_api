@@ -18,7 +18,7 @@ class TestModelMethods(unittest.TestCase):
         Test that get_metadata() returns right values (subset)
         """
         self.assertEqual(self.meta['Name'].replace('-','').replace('_',''),
-                        'benchmarks_api'.replace('-','').replace('_',''))
+                        'benchmarks_cnn_api'.replace('-','').replace('_',''))
         self.assertEqual(self.meta['Author'], 'A.Grupp, V.Kozlov (KIT)')
         self.assertEqual(self.meta['Author-email'], 'valentin.kozlov@kit.edu')
 
