@@ -10,3 +10,9 @@ testtools>=1.4.0
 
 pytest
 pytest-cov
+
+# for testing fix TF 1.10.0
+tensorflow==1.10.0
+# install tf_cnn_benchmarks v1.10.0
+git+https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks@cnn_tf_v1.10_compatible#egg=tf_cnn_benchmarks
+

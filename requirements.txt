@@ -6,4 +6,3 @@ psutil
 
 deepaas==0.5.1
 flaat==0.5.1
-
