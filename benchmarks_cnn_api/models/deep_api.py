@@ -102,8 +102,8 @@ def train(train_args):
     run_results = {"status": "ok", "user_args": train_args, "machine_config": {}, "training": {}, "evaluation": {}}
 
     # Remove possible existing model and log files
-    for f in os.listdir(cfg.MODEL_DIR):
-        file_path = os.path.join(cfg.MODEL_DIR, f)
+    for f in os.listdir(cfg.MODELS_DIR):
+        file_path = os.path.join(cfg.MODELS_DIR, f)
         try:
             if os.path.isfile(file_path):
                 os.unlink(file_path)
@@ -128,8 +128,12 @@ def train(train_args):
             locate_cifar10()
         if data_name == 'imagenet':
             locate_imagenet()
-        verify_selected_model(kwargs['model'], data_name)
+
         kwargs['data_name'] = data_name
+        if data_name == 'imagenet_mini':
+            locate_imagenet_mini()
+            kwargs['data_name'] = 'imagenet'
+        verify_selected_model(kwargs['model'], kwargs['data_name'])
         kwargs['data_dir'] = '{}/{}'.format(cfg.DATA_DIR, data_name)
     else:
         verify_selected_model(kwargs['model'], 'imagenet')
@@ -147,8 +151,8 @@ def train(train_args):
     run_results["training"].update(kwargs)
     if run_results["training"]["device"] == "cpu":
         del run_results["training"]["num_gpus"]  # avoid misleading info
-    kwargs['train_dir'] = cfg.MODEL_DIR
-    kwargs['benchmark_log_dir'] = cfg.MODEL_DIR
+    kwargs['train_dir'] = cfg.MODELS_DIR
+    kwargs['benchmark_log_dir'] = cfg.MODELS_DIR
 
 
     # Setup and run the benchmark model
@@ -157,7 +161,7 @@ def train(train_args):
         params = benchmark.setup(params)
         bench = benchmark.BenchmarkCNN(params)
     except ValueError as param_ex:
-        raise BadRequest("ValueError in parameter setup: {}".format(param_ex))
+        raise BadRequest("ValueError in parameter setup: {}. Params: {}".format(param_ex, params))
 
     tf_version = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
     run_results["training"]["tf_version"] = tf_version
@@ -172,13 +176,13 @@ def train(train_args):
     end_time_global = datetime.datetime.now().strftime(time_fmt)
 
     # Read training and metric log files and store training results
-    training_file = '{}/training.log'.format(cfg.MODEL_DIR)
-    os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), training_file)
+    training_file = '{}/training.log'.format(cfg.MODELS_DIR)
+    os.rename('{}/benchmark_run.log'.format(cfg.MODELS_DIR), training_file)
     run_parameters, machine_config = parse_logfile_training(training_file)
     run_results['training'].update(run_parameters)
     run_results["machine_config"] = machine_config
 
-    metric_file = '{}/metric.log'.format(cfg.MODEL_DIR)
+    metric_file = '{}/metric.log'.format(cfg.MODELS_DIR)
     run_results['training']['result'] = {}
     run_results['training']['result']['global_start_time'] = start_time_global
     run_results['training']['result']['global_end_time'] = end_time_global
@@ -225,12 +229,12 @@ def train(train_args):
 
 
         # Read log files and get evaluation results
-        os.rename('{}/benchmark_run.log'.format(cfg.MODEL_DIR), '{}/evaluation.log'.format(cfg.MODEL_DIR))
-        evaluation_file = '{}/evaluation.log'.format(cfg.MODEL_DIR)
+        os.rename('{}/benchmark_run.log'.format(cfg.MODELS_DIR), '{}/evaluation.log'.format(cfg.MODELS_DIR))
+        evaluation_file = '{}/evaluation.log'.format(cfg.MODELS_DIR)
         run_parameters = parse_logfile_evaluation(evaluation_file)
         run_results['evaluation'].update(run_parameters)
 
-        logfile = '{}/metric.log'.format(cfg.MODEL_DIR)
+        logfile = '{}/metric.log'.format(cfg.MODELS_DIR)
         run_results['evaluation']['result'] = {}
         run_results['evaluation']['result']['global_start_time'] = start_time_global
         run_results['evaluation']['result']['global_end_time'] = end_time_global
@@ -247,6 +251,44 @@ def train(train_args):
 
     return run_results
 
+
+def download_untar_public(dataset, remote_url, tar_mode="r"):
+    """
+    Download dataset from the public URL and untar
+    """
+    dataset_dir = os.path.join(cfg.DATA_DIR, dataset)    
+
+    #url, filename = os.path.split(remote_url)
+    tmp_dataset = os.path.join(TMP_DIR, dataset+".tmp")
+    try:
+        fileName, header = urllib.request.urlretrieve(remote_url,
+                                                      filename=tmp_dataset)
+        print('[INFO] Extracting tar-archive...')
+        with tarfile.open(name=fileName, mode=tar_mode) as tar:
+            # archive name and dataset name maybe different
+            # de-archive, then move files one-by-one to dataset_dir
+            tar.extractall(path=TMP_DIR)
+            rootdir = os.path.commonpath(tar.getnames())
+            rootdir = os.path.join(TMP_DIR, rootdir)
+            for f in os.listdir(rootdir):
+                # if some files already exist, delete them and re-copy
+                try:
+                    shutil.move(os.path.join(rootdir, f), dataset_dir)
+                except OSError:
+                    msg = '[WARNING] {} probably found in {}, '.format(f, dataset_dir) + \
+                    "trying to remove it and re-copy.."
+                    print(msg)
+                    os.remove(os.path.join(dataset_dir, f))
+                    shutil.move(os.path.join(rootdir, f), dataset_dir)
+                
+            shutil.rmtree(rootdir) # 'strong' remove of the directory, i.e. if not empty
+            os.remove(tmp_dataset)
+        print('[INFO] Done extracting files to {}'.format(dataset_dir))
+
+    except urllib.error.HTTPError as e:
+        raise BadRequest('[ERROR] No local dataset found at {}.\
+        But also could not retrieve data from "{}"!'.format(dataset_dir, 
+                                                            remote_url))
 
 def locate_cifar10():
     """
@@ -269,41 +311,30 @@ def locate_cifar10():
 
     # If not available locally, download to data directory
     if not cifar10Local:
-        print('[WARNING] No local copy of Cifar10 found. Trying to download from: https://www.cs.toronto.edu/~kriz/cifar.html')
-        tmp_cifar10 = os.path.join(TMP_DIR, 'cifar.tar.gz')
-        try:
-            fileName, header = urllib.request.urlretrieve('https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', filename=tmp_cifar10)
-            print('[INFO] Extracting tar-archive...')
-            with tarfile.open(name=fileName, mode='r:gz') as tar:
-                tar.extractall(path=cfg.DATA_DIR)
-                rootdir = os.path.commonpath(tar.getnames())
-                rootdir = os.path.join(cfg.DATA_DIR, rootdir)
-                for f in os.listdir(rootdir):
-                    # if some files already exist, delete them first
-                    try:
-                        shutil.move(os.path.join(rootdir, f), cifar10_dir)
-                    except OSError:
-                        msg = '[WARNING] {} probably found in {}, '.format(f, cifar10_dir) + \
-                              "trying to remove it and re-copy.."
-                        print(msg)
-                        os.remove(os.path.join(cifar10_dir, f))
-                        shutil.move(os.path.join(rootdir, f), cifar10_dir)
-                
-                shutil.rmtree(rootdir) # 'strong' remove of the directory, i.e. if not empty
-                os.remove(tmp_cifar10)
-            print('[INFO] Done extracting files to {}'.format(cifar10_dir))
-        except urllib.error.HTTPError as e:
-            raise BadRequest('[ERROR] No local Cifar-10 data set found at /srv/benchmarks_api/data/cifar10/.\
-            But could not retrieve Cifar-10 Data from "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"!')
+        print('[WARNING] No local copy of Cifar10 found.\
+        Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL))
+        download_untar_public('cifar10', cfg.CIFAR10_REMOTE_URL, 'r:gz')
 
+def locate_imagenet_mini():
+    """
+    Check if ImageNet (mini) is in the required folder
+    """
+    imagenet_mini_dir = os.path.join(cfg.DATA_DIR, 'imagenet_mini')
+
+    # Check local availability
+    if not os.path.exists(imagenet_mini_dir):
+        os.makedirs(imagenet_mini_dir)
+        print('[WARNING] No local copy of imagenet_mini found. \
+        Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL))
+        download_untar_public('imagenet_mini', cfg.IMAGENET_MINI_REMOTE_URL)
 
 def locate_imagenet():
     """
     Check if ImageNet is in the required folder
     """
-    if not os.listdir('{}/imagenet'.format(cfg.DATA_DIR)):
-        raise BadRequest('No local ImageNet data set found at /srv/benchmarks_api/data/imagenet/!')
-
+    imagenet_dir = os.path.join(cfg.DATA_DIR, 'imagenet')
+    if not os.path.exists(imagenet_dir):
+        raise BadRequest('No local ImageNet dataset found at {}!'.format(imagenet_dir))
 
 def verify_selected_model(model, data_set):
     """
@@ -311,11 +342,11 @@ def verify_selected_model(model, data_set):
     """
     if data_set == 'cifar10':
         if model not in models_cifar10:
-            raise BadRequest('Unsupported model selected! Cifar10 data set supported models are: {}'
+            raise BadRequest('Unsupported model selected! Cifar10 dataset supported models are: {}'
                          .format(models_cifar10))
     if data_set == 'imagenet':
         if model not in models_imagenet:
-            raise BadRequest('Unsupported model selected! ImageNet data set supported models are: {}'
+            raise BadRequest('Unsupported model selected! ImageNet dataset supported models are: {}'
                              .format(models_imagenet))
 
 
@@ -381,7 +412,6 @@ def parse_metric_file(metric_file):
             if el['name'] == 'average_examples_per_sec':
                 avg_examples = el['value']
     return minTime, maxTime, avg_examples
-
 
 
 def get_train_args():
