@@ -4,6 +4,3 @@ python-dotenv>=0.5.1
 py-cpuinfo
 psutil
 
-deepaas==0.5.1
-flaat==0.5.1
-werkzeug==0.16.1
