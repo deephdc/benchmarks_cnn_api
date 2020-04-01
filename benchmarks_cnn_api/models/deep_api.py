@@ -17,6 +17,7 @@ import tempfile
 
 from tensorflow.python.client import device_lib
 from werkzeug.exceptions import BadRequest
+from webargs import fields
 # import project's config.py
 import benchmarks_cnn_api.config as cfg
 import benchmark_cnn as benchmark
@@ -60,7 +61,7 @@ def get_metadata():
     return meta
 
 
-def predict_file(*args):
+def predict_file(**args):
     """
     Function to make prediction on a local file
     """
@@ -68,7 +69,7 @@ def predict_file(*args):
     message = {"Error": message}
     return message
 
-def predict_data(*args):
+def predict_data(**args):
     """
     Function to make prediction on an uploaded file
     """
@@ -76,7 +77,7 @@ def predict_data(*args):
     message = {"Error": message}
     return message
 
-def predict_url(*args):
+def predict_url(**args):
     """
     Function to make prediction on a URL
     """
@@ -283,7 +284,7 @@ def download_untar_public(dataset, remote_url, tar_mode="r"):
                 
             shutil.rmtree(rootdir) # 'strong' remove of the directory, i.e. if not empty
             os.remove(tmp_dataset)
-        print('[INFO] Done extracting files to {}'.format(dataset_dir))
+        print(('[INFO] Done extracting files to {}'.format(dataset_dir)))
 
     except urllib.error.HTTPError as e:
         raise BadRequest('[ERROR] No local dataset found at {}.\
@@ -311,8 +312,8 @@ def locate_cifar10():
 
     # If not available locally, download to data directory
     if not cifar10Local:
-        print('[WARNING] No local copy of Cifar10 found.\
-        Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL))
+        print(('[WARNING] No local copy of Cifar10 found.\
+        Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL)))
         download_untar_public('cifar10', cfg.CIFAR10_REMOTE_URL, 'r:gz')
 
 def locate_imagenet_mini():
@@ -324,8 +325,8 @@ def locate_imagenet_mini():
     # Check local availability
     if not os.path.exists(imagenet_mini_dir):
         os.makedirs(imagenet_mini_dir)
-        print('[WARNING] No local copy of imagenet_mini found. \
-        Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL))
+        print(('[WARNING] No local copy of imagenet_mini found. \
+        Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL)))
         download_untar_public('imagenet_mini', cfg.IMAGENET_MINI_REMOTE_URL)
 
 def locate_imagenet():
@@ -413,7 +414,6 @@ def parse_metric_file(metric_file):
                 avg_examples = el['value']
     return minTime, maxTime, avg_examples
 
-
 def get_train_args():
     """
     Returns a dict of dicts to feed the deepaas API parser
@@ -421,25 +421,26 @@ def get_train_args():
     train_args = cfg.train_args
     global local_gpus, num_local_gpus
 
-    # convert default values and possible 'choices' into strings
-    for key, val in train_args.items():
-        val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
-        if 'choices' in val:
-            val['choices'] = [str(item) for item in val['choices']]
-
-
     # Adjust num_gpu option accordingly to available local devices
     local_devices = device_lib.list_local_devices()
     local_gpus = [x for x in local_devices if x.device_type == 'GPU']
     num_local_gpus = len(local_gpus)
-
-    train_args['num_gpus']['choices'] = ['0']
+    
+    print('[DEBUG] Local devices: ' local_devices)
+    
     if num_local_gpus == 0:
-        train_args['num_gpus']['default'] = '0'
+        train_args['num_gpus']=fields.Str(missing=  0,
+                            description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
+                            required= False
+                                     )
     else:
-        train_args['num_gpus']['default'] = '1'
-        for i in range(num_local_gpus): train_args['num_gpus']['choices'].append(str(i+1))
-
+        num_gpus = []
+        for i in range(num_local_gpus): num_gpus.append(str(i+1))
+        train_args['num_gpus']=fields.Str(missing=  1,
+                            description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
+                            enum = num_gpus,
+                            required= False
+                                     )
 
     return train_args
 
@@ -449,7 +450,7 @@ def get_test_args():
     predict_args = cfg.predict_args
 
     # convert default values and possible 'choices' into strings
-    for key, val in predict_args.items():
+    for key, val in list(predict_args.items()):
         val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
         if 'choices' in val:
             val['choices'] = [str(item) for item in val['choices']]
@@ -478,7 +479,7 @@ if __name__ == '__main__':
 
     # get arguments configured for get_train_args()
     train_args = get_train_args()
-    for key, val in train_args.items():
+    for key, val in list(train_args.items()):
         parser.add_argument('--%s' % key,
                             default=val['default'],
                             type=type(val['default']),

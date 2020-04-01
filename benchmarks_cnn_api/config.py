@@ -4,6 +4,8 @@
 """
 
 import os
+from webargs import fields
+from collections import OrderedDict
 
 # identify basedir for the package
 BASE_DIR = os.path.dirname(os.path.normpath(os.path.dirname(__file__)))
@@ -28,47 +30,50 @@ CIFAR10_REMOTE_URL="https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
 IMAGENET_MINI_REMOTE_URL="https://nc.deep-hybrid-datacloud.eu/s/aZr8Hi5Jk7GMSe4/download?path=%2F&files=imagenet_mini.tar"
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
-train_args = { 'model': {'default': 'resnet50 (ImageNet)',
-                         'choices': ['googlenet (ImageNet)', 'inception3 (ImageNet)', 'mobilenet (ImageNet)',
+
+train_args = OrderedDict()
+
+train_args['model']= fields.Str(missing= 'resnet50 (ImageNet)',
+                         enum = ['googlenet (ImageNet)', 'inception3 (ImageNet)', 'mobilenet (ImageNet)',
                                      'overfeat (ImageNet)', 'resnet50 (ImageNet)', 'resnet152 (ImageNet)',
                                      'vgg16 (ImageNet)', 'vgg19 (ImageNet)', 'resnet56 (Cifar10)', 'resnet110 (Cifar10)',
                                      'alexnet (ImageNet, Cifar10)'],
-                         'help': 'CNN model for training. N.B. Models only support specific data sets, given in \
+                         description= 'CNN model for training. N.B. Models only support specific data sets, given in \
                                   brackets. Synthetic data can only be processed by ImageNet models.',
-                         'required': True
-                        },
-               'num_gpus': {'default': 1,
-                            'help': 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
-                            'required': True,
-                           },
-               'num_epochs': {'default': 1.0,
-                              'help': 'Number of epochs to train on (float value, < 1.0 allowed).',
-                              'required': False
-                             },
-               'optimizer': {'default': 'sgd',
-                             'choices': ['sgd','momentum','rmsprop','adam'],
-                             'help': 'Optimizer to use.',
-                             'required': True
-                            },
-               'dataset': {'default': 'Synthetic data',
-                           'choices': ['Synthetic data', 'imagenet', 'imagenet_mini', 'cifar10'],
-                           'help': 'Dataset to perform training on. Synthetic \
+                         required=False
+                                  )
+train_args['num_gpus']= fields.Str(missing=  1,
+                            description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
+                            required= False
+                                     )
+train_args['num_epochs'] = fields.Str(missing=  1.0,
+                              description= 'Number of epochs to train on (float value, < 1.0 allowed).',
+                              required= False
+                                       ),
+train_args['optimizer']= fields.Str(missing= 'sgd',
+                             enum =  ['sgd','momentum','rmsprop','adam'],
+                             description=  'Optimizer to use.',
+                             required= False 
+                                      )
+train_args['dataset'] = fields.Str(missing= 'Synthetic data',
+                            enum =  ['Synthetic data', 'imagenet', 'imagenet_mini', 'cifar10'],
+                            description= 'Dataset to perform training on. Synthetic \
                             data: randomly generated ImageNet-like images; \
                             imagenet_mini: 3% of the real ImageNet dataset',
-                           'required': True
-                          },
-               'batch_size_per_device': {'default': 64,
-                                         'help': 'Batch size for each GPU.',
-                                         'required': False
-                                        },
-               'evaluation': {'default': True,
-                              'choices': [False, True],
-                              'help': 'Perform evaluation after the \
+                            required= False 
+                                    )
+train_args['batch_size_per_device'] = fields.Str(missing=  64,
+                                         description= 'Batch size for each GPU.',
+                                         required= False
+                                                  )
+train_args['evaluation']= fields.Str(missing=  True,
+                              enum = [False, True],
+                              description=  'Perform evaluation after the \
                               benchmark in order to get accuracy results (only \
                               meaningful on real data sets!).',
-                              'required': True
-                             }
-             }
+                              required= False
+                                       )
+             
 
 # !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
 predict_args = {}
