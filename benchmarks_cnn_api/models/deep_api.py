@@ -15,7 +15,6 @@ import tempfile
 import time
 import urllib.request
 import urllib.error
-import yaml
 
 from tensorflow.python.client import device_lib
 from werkzeug.exceptions import BadRequest
@@ -26,6 +25,7 @@ import benchmark_cnn as benchmark
 import cnn_util
 
 from aiohttp.web import HTTPBadRequest
+from collections import OrderedDict
 
 ## DEEPaaS wrapper to get e.g. UploadedFile() object
 from deepaas.model.v2 import wrapper
@@ -34,19 +34,22 @@ from deepaas.model.v2 import wrapper
 from flaat import Flaat
 flaat = Flaat()
 
+
+# Switch for debugging in this script
+debug_model = True
+
 # Info on available GPUs
 local_gpus = []
 num_local_gpus = 0
 # Available models for the data sets
 models_cifar10 = ('alexnet', 'resnet56', 'resnet110')
-models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 'vgg19', 'googlenet', 'overfeat', 'inception3')
+models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 
+                   'vgg19', 'googlenet', 'overfeat', 'inception3')
 
 time_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'  # Timeformat of tf-benchmark
 
 TMP_DIR = tempfile.gettempdir() # set the temporary directory
 
-# Switch for debugging in this script
-debug_model = False
 
 def _catch_error(f):
     def wrap(*args, **kwargs):
@@ -113,7 +116,7 @@ def get_metadata():
     return meta
 
 
-def predict_data(**args):
+def predict_data(*args):
     """
     Function to make prediction on a local file
     """
@@ -122,7 +125,7 @@ def predict_data(**args):
     return message
 
 
-def predict_url(**args):
+def predict_url(*args):
     """
     Function to make prediction on a URL
     """
@@ -153,16 +156,25 @@ def predict(**kwargs):
 # if you allow only authorized people to do training
 ###
 @flaat.login_required()
-def train(**train_args):
+def train(**train_kwargs):
     """
     Train network
     train_args : dict
-        Json dict with the user's configuration parameters.
-        Can be loaded with json.loads() or with yaml.safe_load()    
     """
-    print("train(**train_args) - train_args: %s" % (train_args)) if debug_model else ''
 
-    run_results = {"status": "ok", "user_args": train_args, "machine_config": {}, "training": {}, "evaluation": {}}
+    print("train(**train_kwargs) - train_kwargs: %s" % (train_kwargs)) if debug_model else ''
+
+    # use the schema
+    schema = cfg.TrainArgsSchema()
+    # deserialize key-word arguments
+    train_args = schema.load(train_kwargs)
+
+    run_results = {"status": "ok", 
+                   "user_args": train_args, 
+                   "machine_config": {}, 
+                   "training": {}, 
+                   "evaluation": {}
+                  }
 
     timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
     Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
@@ -170,7 +182,9 @@ def train(**train_args):
     if not os.path.exists(Train_Run_Dir):
         os.makedirs(Train_Run_Dir)
     else:
-        raise BadRequest("Directory to store training results, {}, already exists!".format(Train_Run_Dir))
+        raise BadRequest(
+                "Directory to store training results, {}, already exists!"
+                .format(Train_Run_Dir))
         
     # Remove possible existing model and log files
     #for f in os.listdir(Train_Run_Dir):
@@ -182,19 +196,19 @@ def train(**train_args):
     #        print(e)
 
     # Declare training arguments
-    kwargs = {'model': yaml.safe_load(train_args.model).split(' ')[0],
-              'num_gpus': yaml.safe_load(train_args.num_gpus),
-              'num_epochs': yaml.safe_load(train_args.num_epochs),
-              'batch_size': yaml.safe_load(train_args.batch_size_per_device),
-              'optimizer': yaml.safe_load(train_args.optimizer),
+    kwargs = {'model': train_args['model'].split(' ')[0],
+              'num_gpus': train_args['num_gpus'],
+              'num_epochs': train_args['num_epochs'],
+              'batch_size': train_args['batch_size_per_device'],
+              'optimizer': train_args['optimizer'],
               'local_parameter_device': 'cpu',
               'variable_update': 'parameter_server'
               }
 
     # Locate training data and check if the selected network fits it
     # For real data check whether the right data was mounted to the right place and if not download it (cifar10 only)
-    if yaml.safe_load(train_args.dataset) != 'Synthetic data':
-        data_name = yaml.safe_load(train_args.dataset)
+    if train_args['dataset'] != 'Synthetic data':
+        data_name = train_args['dataset']
         if data_name == 'cifar10':
             locate_cifar10()
         if data_name == 'imagenet':
@@ -264,7 +278,7 @@ def train(**train_args):
 
 
     ## Evaluation ##
-    if yaml.safe_load(train_args.evaluation):
+    if train_args['evaluation']:
         run_results["evaluation"] = {}
 
         kwargs_eval = {'model': kwargs['model'],
@@ -281,7 +295,7 @@ def train(**train_args):
             run_results['evaluation']['num_gpus'] = kwargs_eval['num_gpus']  # only for GPU to avoid confusion
 
         # Locate data
-        if yaml.safe_load(train_args.dataset) != 'Synthetic data':
+        if train_args['dataset'] != 'Synthetic data':
             kwargs_eval['data_name'] = kwargs['data_name']
             kwargs_eval['data_dir'] = kwargs['data_dir']
 
@@ -498,7 +512,7 @@ def get_train_args():
     """
     Returns a dict of dicts to feed the deepaas API parser
     """
-    train_args = cfg.train_args
+    d_train = cfg.TrainArgsSchema().fields
     global local_gpus, num_local_gpus
 
     # Adjust num_gpu option accordingly to available local devices
@@ -507,25 +521,36 @@ def get_train_args():
     num_local_gpus = len(local_gpus)
         
     if num_local_gpus == 0:
-        train_args['num_gpus']=fields.Str(missing=  0,
-                            description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
-                            required= False
-                                     )
+        d_train['num_gpus'] = fields.Str(missing=0,
+                              description= 'Number of GPUs to train on \
+                              (one node only). If set to zero, CPU is used.',
+                              required= False
+                              )
     else:
         num_gpus = []
         for i in range(num_local_gpus): num_gpus.append(str(i+1))
-        train_args['num_gpus']=fields.Str(missing=  1,
-                            description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
-                            enum = num_gpus,
-                            required= False
-                                     )
+        d_train['num_gpus'] = fields.Str(missing=1,
+                              description= 'Number of GPUs to train on \
+                              (one node only). If set to zero, \
+                              CPU is used.',
+                              enum = num_gpus,
+                              required= False
+                              )
+
+    # dictionary sorted by key, 
+    # https://docs.python.org/3.6/library/collections.html#ordereddict-examples-and-recipes
+    train_args = OrderedDict(sorted(d_train.items(), key=lambda t: t[0]))
 
     return train_args
 
 
 # !!! deepaas>=1.0.0 calls get_predict_args() to get args for 'predict'
 def get_predict_args():
-    predict_args = cfg.predict_args
+
+    d_predict = cfg.PredictArgsSchema().fields
+    # dictionary sorted by key, 
+    # https://docs.python.org/3.6/library/collections.html#ordereddict-examples-and-recipes
+    predict_args = OrderedDict(sorted(d_predict.items(), key=lambda t: t[0]))
 
     return predict_args
 

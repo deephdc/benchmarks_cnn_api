@@ -4,8 +4,9 @@
 """
 
 import os
-from webargs import fields
 from collections import OrderedDict
+from webargs import fields
+from marshmallow import Schema, INCLUDE
 
 # identify basedir for the package
 BASE_DIR = os.path.dirname(os.path.normpath(os.path.dirname(__file__)))
@@ -31,68 +32,84 @@ IMAGENET_MINI_REMOTE_URL="https://nc.deep-hybrid-datacloud.eu/s/aZr8Hi5Jk7GMSe4/
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
 
-train_args = OrderedDict()
+# class / place to describe arguments for train()
+class TrainArgsSchema(Schema):
+    class Meta:
+        unknown = INCLUDE  # supports extra parameters
 
-train_args['model']= fields.Str(missing='resnet50 (ImageNet)',
-                                enum = ['googlenet (ImageNet)',
-                                        'inception3 (ImageNet)',
-                                        'mobilenet (ImageNet)',
-                                        'overfeat (ImageNet)',
-                                        'resnet50 (ImageNet)',
-                                        'resnet152 (ImageNet)',
-                                        'vgg16 (ImageNet)',
-                                        'vgg19 (ImageNet)',
-                                        'resnet56 (Cifar10)',
-                                        'resnet110 (Cifar10)',
-                                        'alexnet (ImageNet, Cifar10)'],
-                                 description='CNN model for training. \
-                                 N.B. Models only support specific data sets, \
-                                 given in brackets. Synthetic data can only \
-                                 be processed by ImageNet models.',
-                                 required=False
+
+    model = fields.Str(missing='resnet50 (ImageNet)',
+                       enum = ['googlenet (ImageNet)',
+                               'inception3 (ImageNet)',
+                               'mobilenet (ImageNet)',
+                               'overfeat (ImageNet)',
+                               'resnet50 (ImageNet)',
+                               'resnet152 (ImageNet)',
+                               'vgg16 (ImageNet)',
+                               'vgg19 (ImageNet)',
+                               'resnet56 (Cifar10)',
+                               'resnet110 (Cifar10)',
+                               'alexnet (ImageNet, Cifar10)'],
+                       description='CNN model for training. N.B. Models only \
+                       support specific data sets, given in brackets. \
+                       Synthetic data can only be processed by ImageNet models.',
+                       required=False
+                       )
+    num_gpus = fields.Integer(missing=1,
+                              description='Number of GPUs to train on \
+                              (one node only). If set to zero, CPU is used.',
+                              required= False
+                              )
+    num_epochs = fields.Float(missing=1.0,
+                              description='Number of epochs to \
+                              train on (float value, < 1.0 allowed).',
+                              required= False
+                              )
+    optimizer = fields.Str(missing='sgd',
+                           enum=['sgd','momentum','rmsprop','adam'],
+                           description='Optimizer to use.',
+                           required= False 
+                           )
+    dataset = fields.Str(missing='Synthetic data',
+                         enum=['Synthetic data', 
+                               'imagenet',
+                               'imagenet_mini',
+                               'cifar10'],
+                         description='Dataset to perform training on. \
+                         Synthetic data: randomly generated ImageNet-like \
+                         images; imagenet_mini: 3% of the real ImageNet \
+                         dataset',
+                         required=False
+                         )
+    batch_size_per_device = fields.Integer(missing=64,
+                                           description='Batch size for each GPU.',
+                                           required= False
+                                           )
+    evaluation = fields.Boolean(missing=True,
+                                enum = [False, True],
+                                description='Perform evaluation after the \
+                                benchmark in order to get accuracy results \
+                                (only meaningful on real data sets!).',
+                                required=False
                                 )
-train_args['num_gpus']= fields.Str(missing=1,
-                                   description='Number of GPUs to train on \
-                                   (one node only). If set to zero, \
-                                   CPU is used.',
-                                   required= False
-                                  )
-train_args['num_epochs'] = fields.Str(missing=1.0,
-                                      description='Number of epochs to \
-                                      train on (float value, < 1.0 allowed).',
-                                      required= False
-                                     ),
-train_args['optimizer']= fields.Str(missing='sgd',
-                                    enum=['sgd','momentum','rmsprop','adam'],
-                                    description=  'Optimizer to use.',
-                                    required= False 
-                                   )
-train_args['dataset'] = fields.Str(missing='Synthetic data',
-                                   enum=['Synthetic data', 
-                                         'imagenet',
-                                         'imagenet_mini',
-                                         'cifar10'],
-                                   description='Dataset to perform \
-                                   training on. Synthetic data: \
-                                   randomly generated ImageNet-like images; \
-                                   imagenet_mini: 3% of the real ImageNet \
-                                   dataset',
-                                   required=False
-                                  )
-train_args['batch_size_per_device'] = fields.Str(missing=64,
-                                                 description='Batch size \
-                                                 for each GPU.',
-                                                 required= False
-                                                )
-train_args['evaluation']= fields.Str(missing=True,
-                                     enum = [False, True],
-                                     description='Perform evaluation after the \
-                                     benchmark in order to get accuracy \
-                                     results (only meaningful on \
-                                     real data sets!).',
-                                     required= False
-                                    )
              
 
-# !!! deepaas>=1.0.0 calls get_predict_args() to get args for 'predict'
-predict_args = {}
+# class / place to describe arguments for predict()
+class PredictArgsSchema(Schema):
+    class Meta:
+        unknown = INCLUDE  # supports extra parameters
+
+    files = fields.Field(required=False,
+                         missing=None,
+                         type="file",
+                         data_key="data",
+                         location="form",
+                         description="Select the image you \
+                         want to classify."
+                        )
+    
+    urls = fields.Url(required=False,
+                      missing=None,
+                      description="Select an URL of the image \
+                      you want to classify."
+                     )
