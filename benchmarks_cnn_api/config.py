@@ -33,47 +33,66 @@ IMAGENET_MINI_REMOTE_URL="https://nc.deep-hybrid-datacloud.eu/s/aZr8Hi5Jk7GMSe4/
 
 train_args = OrderedDict()
 
-train_args['model']= fields.Str(missing= 'resnet50 (ImageNet)',
-                         enum = ['googlenet (ImageNet)', 'inception3 (ImageNet)', 'mobilenet (ImageNet)',
-                                     'overfeat (ImageNet)', 'resnet50 (ImageNet)', 'resnet152 (ImageNet)',
-                                     'vgg16 (ImageNet)', 'vgg19 (ImageNet)', 'resnet56 (Cifar10)', 'resnet110 (Cifar10)',
-                                     'alexnet (ImageNet, Cifar10)'],
-                         description= 'CNN model for training. N.B. Models only support specific data sets, given in \
-                                  brackets. Synthetic data can only be processed by ImageNet models.',
-                         required=False
+train_args['model']= fields.Str(missing='resnet50 (ImageNet)',
+                                enum = ['googlenet (ImageNet)',
+                                        'inception3 (ImageNet)',
+                                        'mobilenet (ImageNet)',
+                                        'overfeat (ImageNet)',
+                                        'resnet50 (ImageNet)',
+                                        'resnet152 (ImageNet)',
+                                        'vgg16 (ImageNet)',
+                                        'vgg19 (ImageNet)',
+                                        'resnet56 (Cifar10)',
+                                        'resnet110 (Cifar10)',
+                                        'alexnet (ImageNet, Cifar10)'],
+                                 description='CNN model for training. \
+                                 N.B. Models only support specific data sets, \
+                                 given in brackets. Synthetic data can only \
+                                 be processed by ImageNet models.',
+                                 required=False
+                                )
+train_args['num_gpus']= fields.Str(missing=1,
+                                   description='Number of GPUs to train on \
+                                   (one node only). If set to zero, \
+                                   CPU is used.',
+                                   required= False
                                   )
-train_args['num_gpus']= fields.Str(missing=  1,
-                            description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
-                            required= False
-                                     )
-train_args['num_epochs'] = fields.Str(missing=  1.0,
-                              description= 'Number of epochs to train on (float value, < 1.0 allowed).',
-                              required= False
-                                       ),
-train_args['optimizer']= fields.Str(missing= 'sgd',
-                             enum =  ['sgd','momentum','rmsprop','adam'],
-                             description=  'Optimizer to use.',
-                             required= False 
-                                      )
-train_args['dataset'] = fields.Str(missing= 'Synthetic data',
-                            enum =  ['Synthetic data', 'imagenet', 'imagenet_mini', 'cifar10'],
-                            description= 'Dataset to perform training on. Synthetic \
-                            data: randomly generated ImageNet-like images; \
-                            imagenet_mini: 3% of the real ImageNet dataset',
-                            required= False 
+train_args['num_epochs'] = fields.Str(missing=1.0,
+                                      description='Number of epochs to \
+                                      train on (float value, < 1.0 allowed).',
+                                      required= False
+                                     ),
+train_args['optimizer']= fields.Str(missing='sgd',
+                                    enum=['sgd','momentum','rmsprop','adam'],
+                                    description=  'Optimizer to use.',
+                                    required= False 
+                                   )
+train_args['dataset'] = fields.Str(missing='Synthetic data',
+                                   enum=['Synthetic data', 
+                                         'imagenet',
+                                         'imagenet_mini',
+                                         'cifar10'],
+                                   description='Dataset to perform \
+                                   training on. Synthetic data: \
+                                   randomly generated ImageNet-like images; \
+                                   imagenet_mini: 3% of the real ImageNet \
+                                   dataset',
+                                   required=False
+                                  )
+train_args['batch_size_per_device'] = fields.Str(missing=64,
+                                                 description='Batch size \
+                                                 for each GPU.',
+                                                 required= False
+                                                )
+train_args['evaluation']= fields.Str(missing=True,
+                                     enum = [False, True],
+                                     description='Perform evaluation after the \
+                                     benchmark in order to get accuracy \
+                                     results (only meaningful on \
+                                     real data sets!).',
+                                     required= False
                                     )
-train_args['batch_size_per_device'] = fields.Str(missing=  64,
-                                         description= 'Batch size for each GPU.',
-                                         required= False
-                                                  )
-train_args['evaluation']= fields.Str(missing=  True,
-                              enum = [False, True],
-                              description=  'Perform evaluation after the \
-                              benchmark in order to get accuracy results (only \
-                              meaningful on real data sets!).',
-                              required= False
-                                       )
              
 
-# !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
+# !!! deepaas>=1.0.0 calls get_predict_args() to get args for 'predict'
 predict_args = {}

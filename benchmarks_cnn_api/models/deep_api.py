@@ -4,16 +4,18 @@ Model description
 """
 
 import argparse
-import pkg_resources
-import yaml
-import json
-import os
-import shutil
 import datetime
-import urllib.request
-import urllib.error
+import json
+import mimetypes
+import os
+import pkg_resources
+import shutil
 import tarfile
 import tempfile
+import time
+import urllib.request
+import urllib.error
+import yaml
 
 from tensorflow.python.client import device_lib
 from werkzeug.exceptions import BadRequest
@@ -22,6 +24,15 @@ from webargs import fields
 import benchmarks_cnn_api.config as cfg
 import benchmark_cnn as benchmark
 import cnn_util
+
+from aiohttp.web import HTTPBadRequest
+
+## DEEPaaS wrapper to get e.g. UploadedFile() object
+from deepaas.model.v2 import wrapper
+
+## Authorization
+from flaat import Flaat
+flaat = Flaat()
 
 # Info on available GPUs
 local_gpus = []
@@ -33,6 +44,47 @@ models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 'vg
 time_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'  # Timeformat of tf-benchmark
 
 TMP_DIR = tempfile.gettempdir() # set the temporary directory
+
+# Switch for debugging in this script
+debug_model = False
+
+def _catch_error(f):
+    def wrap(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            raise HTTPBadRequest(reason=e)
+    return wrap
+
+
+def _fields_to_dict(fields_in):
+    """
+    Function to convert mashmallow fields to dict()
+    """
+    dict_out = {}
+    
+    for key, val in fields_in.items():
+        param = {}
+        param['default'] = val.missing
+        param['type'] = type(val.missing)
+        if key == 'files' or key == 'urls':
+            param['type'] = str
+
+        val_help = val.metadata['description']
+        if 'enum' in val.metadata.keys():
+            val_help = "{}. Choices: {}".format(val_help, 
+                                                val.metadata['enum'])
+        param['help'] = val_help
+
+        try:
+            val_req = val.required
+        except:
+            val_req = False
+        param['required'] = val_req
+
+        dict_out[key] = param
+    return dict_out
+
 
 def get_metadata():
     """
@@ -61,7 +113,7 @@ def get_metadata():
     return meta
 
 
-def predict_file(**args):
+def predict_data(**args):
     """
     Function to make prediction on a local file
     """
@@ -69,13 +121,6 @@ def predict_file(**args):
     message = {"Error": message}
     return message
 
-def predict_data(**args):
-    """
-    Function to make prediction on an uploaded file
-    """
-    message = 'Not implemented (predict_data())'
-    message = {"Error": message}
-    return message
 
 def predict_url(**args):
     """
@@ -86,19 +131,36 @@ def predict_url(**args):
     return message
 
 
+@_catch_error
+def predict(**kwargs):
+    
+    print("predict(**kwargs) - kwargs: %s" % (kwargs)) if debug_model else ''
+
+    if (not any([kwargs['urls'], kwargs['files']]) or
+            all([kwargs['urls'], kwargs['files']])):
+        raise Exception("You must provide either 'url' or 'data' in the payload")
+
+    if kwargs['files']:
+        kwargs['files'] = [kwargs['files']]  # patch until list is available
+        return predict_data(kwargs)
+    elif kwargs['urls']:
+        kwargs['urls'] = [kwargs['urls']]  # patch until list is available
+        return predict_url(kwargs)
+
+
 ###
 # Uncomment the following two lines
 # if you allow only authorized people to do training
 ###
-# import flaat
-# @flaat.login_required()
-def train(train_args):
+@flaat.login_required()
+def train(**train_args):
     """
     Train network
     train_args : dict
         Json dict with the user's configuration parameters.
         Can be loaded with json.loads() or with yaml.safe_load()    
     """
+    print("train(**train_args) - train_args: %s" % (train_args)) if debug_model else ''
 
     run_results = {"status": "ok", "user_args": train_args, "machine_config": {}, "training": {}, "evaluation": {}}
 
@@ -324,6 +386,7 @@ def locate_cifar10():
         Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL)))
         download_untar_public('cifar10', cfg.CIFAR10_REMOTE_URL, 'r:gz')
 
+
 def locate_imagenet_mini():
     """
     Check if ImageNet (mini) is in the required folder
@@ -337,6 +400,7 @@ def locate_imagenet_mini():
         Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL)))
         download_untar_public('imagenet_mini', cfg.IMAGENET_MINI_REMOTE_URL)
 
+
 def locate_imagenet():
     """
     Check if ImageNet is in the required folder
@@ -344,6 +408,7 @@ def locate_imagenet():
     imagenet_dir = os.path.join(cfg.DATA_DIR, 'imagenet')
     if not os.path.exists(imagenet_dir):
         raise BadRequest('No local ImageNet dataset found at {}!'.format(imagenet_dir))
+
 
 def verify_selected_model(model, data_set):
     """
@@ -428,6 +493,7 @@ def parse_metric_file(metric_file):
                 avg_examples = el['value']
     return minTime, maxTime, avg_examples
 
+
 def get_train_args():
     """
     Returns a dict of dicts to feed the deepaas API parser
@@ -457,20 +523,14 @@ def get_train_args():
     return train_args
 
 
-# !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
-def get_test_args():
+# !!! deepaas>=1.0.0 calls get_predict_args() to get args for 'predict'
+def get_predict_args():
     predict_args = cfg.predict_args
-
-    # convert default values and possible 'choices' into strings
-    for key, val in list(predict_args.items()):
-        val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
-        if 'choices' in val:
-            val['choices'] = [str(item) for item in val['choices']]
 
     return predict_args
 
 
-# during development it might be practical
+# during development it might be practical 
 # to check your code from the command line
 def main():
     """
@@ -479,27 +539,83 @@ def main():
     """
 
     if args.method == 'get_metadata':
-        get_metadata()
+        meta = get_metadata()
+        print(json.dumps(meta))
+        return meta 
+    elif args.method == 'predict':
+        ## use the schema
+        #schema = cfg.PredictArgsSchema()
+        #result = schema.load(vars(args))
+    
+        # TODO: change to many files ('for' itteration)
+        if args.files:
+            # create tmp file as later it will be deleted
+            temp = tempfile.NamedTemporaryFile()
+            temp.close()
+            # copy original file into tmp file
+            with open(args.files, "rb") as f:
+                with open(temp.name, "wb") as f_tmp:
+                    for line in f:
+                        f_tmp.write(line)
+        
+            # create file object to mimic aiohttp workflow
+            file_obj = wrapper.UploadedFile(name="data", 
+                                            filename = temp.name,
+                                            content_type=mimetypes.MimeTypes().guess_type(args.files)[0],
+                                            original_filename=args.files)
+            args.files = file_obj
+        
+        results = predict(**vars(args))
+        print(json.dumps(results))
+        return results        
     elif args.method == 'train':
-        train(args)
-    else:
-        get_metadata()
+        start = time.time()
+        results = train(**vars(args))
+        print("Elapsed time:  ", time.time() - start)
+        print(json.dumps(results))
+        return results
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Model parameters')
+    
+    parser = argparse.ArgumentParser(description='Model parameters', 
+                                     add_help=False)
+    
+    cmd_parser = argparse.ArgumentParser()    
+    subparsers = cmd_parser.add_subparsers(
+                            help='methods. Use \"model.py method --help\" to get more info', 
+                            dest='method')
 
-    # get arguments configured for get_train_args()
-    train_args = get_train_args()
-    for key, val in list(train_args.items()):
-        parser.add_argument('--%s' % key,
-                            default=val['default'],
-                            type=type(val['default']),
-                            help=val['help'])
+    get_metadata_parser = subparsers.add_parser('get_metadata', 
+                                         help='get_metadata method',
+                                         parents=[parser])
 
-    parser.add_argument('--method', type=str, default="get_metadata",
-                        help='Method to use: get_metadata (default), \
-                        predict_file, predict_data, predict_url, train')
-    args = parser.parse_args()
+    # get train arguments configured
+    train_parser = subparsers.add_parser('train', 
+                                         help='commands for training',
+                                         parents=[parser])
+    train_args = _fields_to_dict(get_train_args())
+    for key, val in train_args.items():
+        train_parser.add_argument('--%s' % key,
+                               default=val['default'],
+                               type=val['type'], #may just put str
+                               help=val['help'],
+                               required=val['required'])
 
+    # get predict arguments configured
+    predict_parser = subparsers.add_parser('predict', 
+                                           help='commands for prediction',
+                                           parents=[parser])
+
+    predict_args = _fields_to_dict(get_predict_args())
+    for key, val in predict_args.items():
+        predict_parser.add_argument('--%s' % key,
+                               default=val['default'],
+                               type=val['type'], #may just put str
+                               help=val['help'],
+                               required=val['required'])
+
+    args = cmd_parser.parse_args()
+   
     main()
+
