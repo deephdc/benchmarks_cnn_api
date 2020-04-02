@@ -4,3 +4,9 @@ python-dotenv>=0.5.1
 py-cpuinfo
 psutil
 
+webargs>=5.5.2
+marshmallow
+
+deepaas>=1.2.0
+flaat>=0.5.1
+
