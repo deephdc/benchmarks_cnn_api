@@ -101,14 +101,22 @@ def train(train_args):
 
     run_results = {"status": "ok", "user_args": train_args, "machine_config": {}, "training": {}, "evaluation": {}}
 
+    timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
+    Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
+
+    if not os.path.exists(Train_Run_Dir):
+        os.makedirs(Train_Run_Dir)
+    else:
+        raise BadRequest("Directory to store training results, {}, already exists!".format(Train_Run_Dir))
+        
     # Remove possible existing model and log files
-    for f in os.listdir(cfg.MODELS_DIR):
-        file_path = os.path.join(cfg.MODELS_DIR, f)
-        try:
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-        except Exception as e:
-            print(e)
+    #for f in os.listdir(Train_Run_Dir):
+    #    file_path = os.path.join(Train_Run_Dir, f)
+    #    try:
+    #        if os.path.isfile(file_path):
+    #            os.unlink(file_path)
+    #    except Exception as e:
+    #        print(e)
 
     # Declare training arguments
     kwargs = {'model': yaml.safe_load(train_args.model).split(' ')[0],
@@ -151,8 +159,8 @@ def train(train_args):
     run_results["training"].update(kwargs)
     if run_results["training"]["device"] == "cpu":
         del run_results["training"]["num_gpus"]  # avoid misleading info
-    kwargs['train_dir'] = cfg.MODELS_DIR
-    kwargs['benchmark_log_dir'] = cfg.MODELS_DIR
+    kwargs['train_dir'] = Train_Run_Dir
+    kwargs['benchmark_log_dir'] = Train_Run_Dir
 
 
     # Setup and run the benchmark model
@@ -176,13 +184,13 @@ def train(train_args):
     end_time_global = datetime.datetime.now().strftime(time_fmt)
 
     # Read training and metric log files and store training results
-    training_file = '{}/training.log'.format(cfg.MODELS_DIR)
-    os.rename('{}/benchmark_run.log'.format(cfg.MODELS_DIR), training_file)
+    training_file = '{}/training.log'.format(Train_Run_Dir)
+    os.rename('{}/benchmark_run.log'.format(Train_Run_Dir), training_file)
     run_parameters, machine_config = parse_logfile_training(training_file)
     run_results['training'].update(run_parameters)
     run_results["machine_config"] = machine_config
 
-    metric_file = '{}/metric.log'.format(cfg.MODELS_DIR)
+    metric_file = '{}/metric.log'.format(Train_Run_Dir)
     run_results['training']['result'] = {}
     run_results['training']['result']['global_start_time'] = start_time_global
     run_results['training']['result']['global_end_time'] = end_time_global
@@ -229,12 +237,12 @@ def train(train_args):
 
 
         # Read log files and get evaluation results
-        os.rename('{}/benchmark_run.log'.format(cfg.MODELS_DIR), '{}/evaluation.log'.format(cfg.MODELS_DIR))
-        evaluation_file = '{}/evaluation.log'.format(cfg.MODELS_DIR)
+        os.rename('{}/benchmark_run.log'.format(Train_Run_Dir), '{}/evaluation.log'.format(Train_Run_Dir))
+        evaluation_file = '{}/evaluation.log'.format(Train_Run_Dir)
         run_parameters = parse_logfile_evaluation(evaluation_file)
         run_results['evaluation'].update(run_parameters)
 
-        logfile = '{}/metric.log'.format(cfg.MODELS_DIR)
+        logfile = '{}/metric.log'.format(Train_Run_Dir)
         run_results['evaluation']['result'] = {}
         run_results['evaluation']['result']['global_start_time'] = start_time_global
         run_results['evaluation']['result']['global_end_time'] = end_time_global
@@ -362,7 +370,10 @@ def parse_logfile_training(logFile):
             if el['name'] == 'batch_size':
                 run_parameters['batch_size'] = el['long_value']
             if el['name'] == 'batch_size_per_device':
-                run_parameters['batch_size_per_device'] = el['float_value']
+                try:
+                    run_parameters['batch_size_per_device'] = el['float_value']
+                except:
+                    run_parameters['batch_size_per_device'] = el['long_value']
             if el['name'] == 'num_batches':
                 run_parameters['num_batches'] = el['long_value']
 
@@ -383,7 +394,10 @@ def parse_logfile_evaluation(logFile):
             if el['name'] == 'batch_size':
                 run_parameters['batch_size'] = el['long_value']
             if el['name'] == 'batch_size_per_device':
-                run_parameters['batch_size_per_device'] = el['float_value']
+                try:
+                    run_parameters['batch_size_per_device'] = el['float_value']
+                except:
+                    run_parameters['batch_size_per_device'] = el['long_value']
             if el['name'] == 'num_batches':
                 run_parameters['num_batches'] = el['long_value']
             if el['name'] == 'data_format':
