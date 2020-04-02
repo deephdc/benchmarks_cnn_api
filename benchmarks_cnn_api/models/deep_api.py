@@ -439,9 +439,7 @@ def get_train_args():
     local_devices = device_lib.list_local_devices()
     local_gpus = [x for x in local_devices if x.device_type == 'GPU']
     num_local_gpus = len(local_gpus)
-    
-    print('[DEBUG] Local devices: ' local_devices)
-    
+        
     if num_local_gpus == 0:
         train_args['num_gpus']=fields.Str(missing=  0,
                             description= 'Number of GPUs to train on (one node only). If set to zero, CPU is used.',
