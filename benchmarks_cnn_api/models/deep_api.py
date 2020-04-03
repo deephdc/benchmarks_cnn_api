@@ -39,9 +39,6 @@ flaat = Flaat()
 # Switch for debugging in this script
 debug_model = True
 
-# Info on available GPUs
-local_gpus = []
-num_local_gpus = 0
 # Available models for the data sets
 models_cifar10 = ('alexnet', 'resnet56', 'resnet110')
 models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 
@@ -59,6 +56,18 @@ def _catch_error(f):
         except Exception as e:
             raise HTTPBadRequest(reason=e)
     return wrap
+
+
+def _get_num_available_gpus():
+    # Get number of local GPUs according to available local devices
+    local_devices = device_lib.list_local_devices()
+    local_gpus = [x for x in local_devices if x.device_type == 'GPU']
+    num_local_gpus = len(local_gpus)
+    
+    return num_local_gpus
+
+# assing it globally
+num_local_gpus = _get_num_available_gpus()
 
 
 def _fields_to_dict(fields_in):
@@ -184,6 +193,7 @@ def train(**train_kwargs):
 
     timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
     Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
+    Eval_Dir = os.path.join(Train_Run_Dir, "eval_dir")
 
     if not os.path.exists(Train_Run_Dir):
         os.makedirs(Train_Run_Dir)
@@ -201,6 +211,12 @@ def train(**train_kwargs):
     #    except Exception as e:
     #        print(e)
 
+    # how often print training info
+    if train_args['num_epochs'] < 1.0:
+        display_every = 10
+    else:
+        display_every = 100
+
     # Declare training arguments
     kwargs = {'model': train_args['model'].split(' ')[0],
               'num_gpus': train_args['num_gpus'],
@@ -208,7 +224,12 @@ def train(**train_kwargs):
               'batch_size': train_args['batch_size_per_device'],
               'optimizer': train_args['optimizer'],
               'local_parameter_device': 'cpu',
-              'variable_update': 'parameter_server'
+              'variable_update': 'parameter_server',
+              'allow_growth': True,
+              'print_training_accuracy': True,
+              'display_every': display_every
+              # 'eval_dir': Eval_Dir,
+              # 'eval_interval_secs': 120
               }
 
     # Locate training data and check if the selected network fits it
@@ -225,7 +246,7 @@ def train(**train_kwargs):
             locate_imagenet_mini()
             kwargs['data_name'] = 'imagenet'
         verify_selected_model(kwargs['model'], kwargs['data_name'])
-        kwargs['data_dir'] = '{}/{}'.format(cfg.DATA_DIR, data_name)
+        kwargs['data_dir'] = os.path.join(cfg.DATA_DIR, data_name)
     else:
         verify_selected_model(kwargs['model'], 'imagenet')
 
@@ -244,7 +265,6 @@ def train(**train_kwargs):
         del run_results["training"]["num_gpus"]  # avoid misleading info
     kwargs['train_dir'] = Train_Run_Dir
     kwargs['benchmark_log_dir'] = Train_Run_Dir
-
 
     # Setup and run the benchmark model
     params = benchmark.make_params(**kwargs)
@@ -294,7 +314,7 @@ def train(**train_kwargs):
                        'benchmark_log_dir': kwargs['benchmark_log_dir'],
                        'train_dir': kwargs['train_dir'],
                        'eval': True
-                       # 'eval_dir': cfg.DATA_DIR,
+                       # 'eval_dir': Eval_Dir,
                        }
         run_results['evaluation']['device'] = kwargs_eval['device']
         if run_results['evaluation']['device'] == 'gpu':
@@ -519,15 +539,9 @@ def get_train_args():
     Returns a dict of dicts to feed the deepaas API parser
     """
     d_train = cfg.TrainArgsSchema().fields
-    global local_gpus, num_local_gpus
-
-    # Adjust num_gpu option accordingly to available local devices
-    local_devices = device_lib.list_local_devices()
-    local_gpus = [x for x in local_devices if x.device_type == 'GPU']
-    num_local_gpus = len(local_gpus)
         
     if num_local_gpus == 0:
-        d_train['num_gpus'] = fields.Str(missing=0,
+        d_train['num_gpus'] = fields.Int(missing=0,
                               description= 'Number of GPUs to train on \
                               (one node only). If set to zero, CPU is used.',
                               required= False
@@ -535,7 +549,7 @@ def get_train_args():
     else:
         num_gpus = []
         for i in range(num_local_gpus): num_gpus.append(str(i+1))
-        d_train['num_gpus'] = fields.Str(missing=1,
+        d_train['num_gpus'] = fields.Int(missing=1,
                               description= 'Number of GPUs to train on \
                               (one node only). If set to zero, \
                               CPU is used.',
