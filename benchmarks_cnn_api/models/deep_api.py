@@ -9,6 +9,7 @@ import json
 import mimetypes
 import os
 import pkg_resources
+import re
 import shutil
 import tarfile
 import tempfile
@@ -61,11 +62,10 @@ def _catch_error(f):
 
 
 def _fields_to_dict(fields_in):
-    """
-    Function to convert mashmallow fields to dict()
-    """
+    """Function to convert mashmallow fields to dict()"""
+
     dict_out = {}
-    
+
     for key, val in fields_in.items():
         param = {}
         param['default'] = val.missing
@@ -74,14 +74,20 @@ def _fields_to_dict(fields_in):
             param['type'] = str
 
         val_help = val.metadata['description']
+        # argparse hates % sign:
+        if '%' in val_help:
+            # replace single occurancies of '%' with '%%'
+            # since '%%' is accepted by argparse
+            val_help = re.sub(r'(?<!%)%(?!%)', r'%%', val_help)
+
         if 'enum' in val.metadata.keys():
-            val_help = "{}. Choices: {}".format(val_help, 
+            val_help = "{}. Choices: {}".format(val_help,
                                                 val.metadata['enum'])
         param['help'] = val_help
 
         try:
             val_req = val.required
-        except:
+        except Exception:
             val_req = False
         param['required'] = val_req
 
