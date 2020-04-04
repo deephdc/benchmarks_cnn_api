@@ -48,6 +48,9 @@ time_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'  # Timeformat of tf-benchmark
 
 TMP_DIR = tempfile.gettempdir() # set the temporary directory
 
+# in the case of Synthetic data we need a delay to close metric/evaluation.log
+t_file_close_delay = 4
+
 
 def _catch_error(f):
     def wrap(*args, **kwargs):
@@ -259,12 +262,12 @@ def train(**train_kwargs):
         kwargs['device'] = 'gpu'
         kwargs['data_format'] = 'NCHW'
 
-    # Add training info to run_results but not the directories
+    kwargs['train_dir'] = Train_Run_Dir
+    kwargs['benchmark_log_dir'] = Train_Run_Dir
+    # Add training info to run_results
     run_results["training"].update(kwargs)
     if run_results["training"]["device"] == "cpu":
         del run_results["training"]["num_gpus"]  # avoid misleading info
-    kwargs['train_dir'] = Train_Run_Dir
-    kwargs['benchmark_log_dir'] = Train_Run_Dir
 
     # Setup and run the benchmark model
     params = benchmark.make_params(**kwargs)
@@ -287,13 +290,15 @@ def train(**train_kwargs):
     end_time_global = datetime.datetime.now().strftime(time_fmt)
 
     # Read training and metric log files and store training results
-    training_file = '{}/training.log'.format(Train_Run_Dir)
-    os.rename('{}/benchmark_run.log'.format(Train_Run_Dir), training_file)
+    training_file = os.path.join(Train_Run_Dir, 'training.log')
+    os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), training_file)
     run_parameters, machine_config = parse_logfile_training(training_file)
     run_results['training'].update(run_parameters)
     run_results["machine_config"] = machine_config
 
-    metric_file = '{}/metric.log'.format(Train_Run_Dir)
+    metric_file = os.path.join(Train_Run_Dir, 'metric.log')
+    # it seems, in the case of Synthetic data we need a delay to close metric.log
+    time.sleep(t_file_close_delay) if train_args['dataset'] == 'Synthetic data' else ''
     run_results['training']['result'] = {}
     run_results['training']['result']['global_start_time'] = start_time_global
     run_results['training']['result']['global_end_time'] = end_time_global
@@ -340,16 +345,20 @@ def train(**train_kwargs):
 
 
         # Read log files and get evaluation results
-        os.rename('{}/benchmark_run.log'.format(Train_Run_Dir), '{}/evaluation.log'.format(Train_Run_Dir))
-        evaluation_file = '{}/evaluation.log'.format(Train_Run_Dir)
+        evaluation_file = os.path.join(Train_Run_Dir, 'evaluation.log')
+        os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), evaluation_file)
         run_parameters = parse_logfile_evaluation(evaluation_file)
         run_results['evaluation'].update(run_parameters)
 
-        logfile = '{}/metric.log'.format(Train_Run_Dir)
+        logfile = os.path.join(Train_Run_Dir, 'metric.log')
+
         run_results['evaluation']['result'] = {}
         run_results['evaluation']['result']['global_start_time'] = start_time_global
         run_results['evaluation']['result']['global_end_time'] = end_time_global
 
+        # it seems, in the case of Synthetic data we need a delay to close evaluation.log
+        time.sleep(t_file_close_delay*2.0) if train_args['dataset'] == 'Synthetic data' else ''
+        
         with open(logfile, "r") as f:
             for line in f:
                 l = json.loads(line)
@@ -520,8 +529,9 @@ def parse_logfile_evaluation(logFile):
 def parse_metric_file(metric_file):
     """ takes the metric file and extracts timestamps and avg_imgs / sec info
     """
+
+    maxStep, minTime, maxTime, avg_examples = 0, 0, 0, 0
     with open(metric_file, "r") as f:
-        maxStep, minTime, maxTime, avg_examples = 0, 0, 0, 0
         for line in f:
             el = json.loads(line)
             if el['name'] == "current_examples_per_sec" and el['global_step'] == 1:
@@ -531,6 +541,7 @@ def parse_metric_file(metric_file):
                 maxStep = el['global_step']
             if el['name'] == 'average_examples_per_sec':
                 avg_examples = el['value']
+
     return minTime, maxTime, avg_examples
 
 
