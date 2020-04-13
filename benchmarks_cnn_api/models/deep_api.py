@@ -60,6 +60,26 @@ def _catch_error(f):
             raise HTTPBadRequest(reason=e)
     return wrap
 
+def _wait_final_read(input_file, parameter):
+    """Function to ensure successful read of the parameter"""
+    max_cycles = 25 # to avoid an infinite loop
+    icyc = 0
+    read = False
+    print("[DEBUG] read {} is"
+          .format(parameter), end = ' ') if debug_model else ''
+    while icyc < max_cycles and not read: 
+        with open(input_file, "r") as f:
+            for line in f:
+                l = json.loads(line)
+                if l["name"] == parameter:
+                    read = True
+                    
+        print("{}"
+              .format(read), end = ' ') if debug_model else ''
+        icyc += 1
+        time.sleep(1)
+    
+    print("") if debug_model else ''
 
 def _get_num_available_gpus():
     # Get number of local GPUs according to available local devices
@@ -180,7 +200,7 @@ def train(**train_kwargs):
     train_args : dict
     """
 
-    print("train(**train_kwargs) - train_kwargs: %s" % (train_kwargs)) if debug_model else ''
+    print("[DEBUG] train(**train_kwargs) - train_kwargs: %s" % (train_kwargs)) if debug_model else ''
 
     # use the schema
     schema = cfg.TrainArgsSchema()
@@ -221,11 +241,13 @@ def train(**train_kwargs):
         display_every = 100
 
     # Declare training arguments
-    kwargs = {'model': train_args['model'].split(' ')[0],
+    kwargs = {'batch_size': train_args['batch_size_per_device'],
+              'model': train_args['model'].split(' ')[0],
               'num_gpus': train_args['num_gpus'],
               'num_epochs': train_args['num_epochs'],
-              'batch_size': train_args['batch_size_per_device'],
               'optimizer': train_args['optimizer'],
+              'use_fp16': train_args['use_fp16'],
+              'weight_decay': train_args['weight_decay'],
               'local_parameter_device': 'cpu',
               'variable_update': 'parameter_server',
               'allow_growth': True,
@@ -270,6 +292,7 @@ def train(**train_kwargs):
         del run_results["training"]["num_gpus"]  # avoid misleading info
 
     # Setup and run the benchmark model
+    print("[DEBUG] benchmark kwargs: %s" % (kwargs)) if debug_model else ''
     params = benchmark.make_params(**kwargs)
     try:
         params = benchmark.setup(params)
@@ -298,7 +321,7 @@ def train(**train_kwargs):
 
     metric_file = os.path.join(Train_Run_Dir, 'metric.log')
     # it seems, in the case of Synthetic data we need a delay to close metric.log
-    time.sleep(t_file_close_delay) if train_args['dataset'] == 'Synthetic data' else ''
+    _wait_final_read(metric_file, "average_examples_per_sec")
     run_results['training']['result'] = {}
     run_results['training']['result']['global_start_time'] = start_time_global
     run_results['training']['result']['global_end_time'] = end_time_global
@@ -357,7 +380,7 @@ def train(**train_kwargs):
         run_results['evaluation']['result']['global_end_time'] = end_time_global
 
         # it seems, in the case of Synthetic data we need a delay to close evaluation.log
-        time.sleep(t_file_close_delay*2.0) if train_args['dataset'] == 'Synthetic data' else ''
+        _wait_final_read(logfile, "eval_average_examples_per_sec")
         
         with open(logfile, "r") as f:
             for line in f:

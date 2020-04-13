@@ -37,7 +37,21 @@ class TrainArgsSchema(Schema):
     class Meta:
         unknown = INCLUDE  # supports extra parameters
 
-
+    batch_size_per_device = fields.Integer(missing=64,
+                                           description='Batch size for each GPU.',
+                                           required= False
+                                           )
+    dataset = fields.Str(missing='Synthetic data',
+                         enum=['Synthetic data', 
+                               'imagenet',
+                               'imagenet_mini',
+                               'cifar10'],
+                         description='Dataset to perform training on. \
+                         Synthetic data: randomly generated ImageNet-like \
+                         images; imagenet_mini: 3% of the real ImageNet \
+                         dataset',
+                         required=False
+                         )
     model = fields.Str(missing='resnet50 (ImageNet)',
                        enum = ['googlenet (ImageNet)',
                                'inception3 (ImageNet)',
@@ -70,21 +84,16 @@ class TrainArgsSchema(Schema):
                            description='Optimizer to use.',
                            required= False 
                            )
-    dataset = fields.Str(missing='Synthetic data',
-                         enum=['Synthetic data', 
-                               'imagenet',
-                               'imagenet_mini',
-                               'cifar10'],
-                         description='Dataset to perform training on. \
-                         Synthetic data: randomly generated ImageNet-like \
-                         images; imagenet_mini: 3% of the real ImageNet \
-                         dataset',
-                         required=False
-                         )
-    batch_size_per_device = fields.Integer(missing=64,
-                                           description='Batch size for each GPU.',
-                                           required= False
-                                           )
+    use_fp16 = fields.Boolean(missing=False,
+                              enum = [False, True],
+                              description='Use 16-bit floats for certain \
+                              tensors instead of 32-bit floats. ',
+                              required=False
+                              )
+    weight_decay = fields.Float(missing=4.0e-5,
+                              description='Weight decay factor for training',
+                              required=False
+                              )    
     evaluation = fields.Boolean(missing=True,
                                 enum = [False, True],
                                 description='Perform evaluation after the \
