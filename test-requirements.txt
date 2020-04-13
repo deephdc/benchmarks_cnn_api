@@ -13,3 +13,5 @@ pytest-cov
 
 # for testing fix TF 1.10.0
 tensorflow==1.10.0
+
+aiohttp

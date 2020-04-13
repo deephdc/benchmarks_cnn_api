@@ -4,34 +4,128 @@ Model description
 """
 
 import argparse
-import pkg_resources
-import yaml
-import json
-import os
-import shutil
 import datetime
-import urllib.request
-import urllib.error
+import json
+import mimetypes
+import os
+import pkg_resources
+import re
+import shutil
 import tarfile
 import tempfile
+import time
+import urllib.request
+import urllib.error
 
 from tensorflow.python.client import device_lib
 from werkzeug.exceptions import BadRequest
+from webargs import fields
 # import project's config.py
 import benchmarks_cnn_api.config as cfg
 import benchmark_cnn as benchmark
 import cnn_util
 
-# Info on available GPUs
-local_gpus = []
-num_local_gpus = 0
+from aiohttp.web import HTTPBadRequest
+from collections import OrderedDict
+
+## DEEPaaS wrapper to get e.g. UploadedFile() object
+from deepaas.model.v2 import wrapper
+
+## Authorization
+from flaat import Flaat
+flaat = Flaat()
+
+
+# Switch for debugging in this script
+debug_model = True
+
 # Available models for the data sets
 models_cifar10 = ('alexnet', 'resnet56', 'resnet110')
-models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 'vgg19', 'googlenet', 'overfeat', 'inception3')
+models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 
+                   'vgg19', 'googlenet', 'overfeat', 'inception3')
 
 time_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'  # Timeformat of tf-benchmark
 
 TMP_DIR = tempfile.gettempdir() # set the temporary directory
+
+# in the case of Synthetic data we need a delay to close metric/evaluation.log
+t_file_close_delay = 4
+
+
+def _catch_error(f):
+    def wrap(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            raise HTTPBadRequest(reason=e)
+    return wrap
+
+def _wait_final_read(input_file, parameter):
+    """Function to ensure successful read of the parameter"""
+    max_cycles = 25 # to avoid an infinite loop
+    icyc = 0
+    read = False
+    print("[DEBUG] read {} is"
+          .format(parameter), end = ' ') if debug_model else ''
+    while icyc < max_cycles and not read: 
+        with open(input_file, "r") as f:
+            for line in f:
+                l = json.loads(line)
+                if l["name"] == parameter:
+                    read = True
+                    
+        print("{}"
+              .format(read), end = ' ') if debug_model else ''
+        icyc += 1
+        time.sleep(1)
+    
+    print("") if debug_model else ''
+
+def _get_num_available_gpus():
+    # Get number of local GPUs according to available local devices
+    local_devices = device_lib.list_local_devices()
+    local_gpus = [x for x in local_devices if x.device_type == 'GPU']
+    num_local_gpus = len(local_gpus)
+    
+    return num_local_gpus
+
+# assing it globally
+num_local_gpus = _get_num_available_gpus()
+
+
+def _fields_to_dict(fields_in):
+    """Function to convert mashmallow fields to dict()"""
+
+    dict_out = {}
+
+    for key, val in fields_in.items():
+        param = {}
+        param['default'] = val.missing
+        param['type'] = type(val.missing)
+        if key == 'files' or key == 'urls':
+            param['type'] = str
+
+        val_help = val.metadata['description']
+        # argparse hates % sign:
+        if '%' in val_help:
+            # replace single occurancies of '%' with '%%'
+            # since '%%' is accepted by argparse
+            val_help = re.sub(r'(?<!%)%(?!%)', r'%%', val_help)
+
+        if 'enum' in val.metadata.keys():
+            val_help = "{}. Choices: {}".format(val_help,
+                                                val.metadata['enum'])
+        param['help'] = val_help
+
+        try:
+            val_req = val.required
+        except Exception:
+            val_req = False
+        param['required'] = val_req
+
+        dict_out[key] = param
+    return dict_out
+
 
 def get_metadata():
     """
@@ -60,7 +154,7 @@ def get_metadata():
     return meta
 
 
-def predict_file(*args):
+def predict_data(*args):
     """
     Function to make prediction on a local file
     """
@@ -68,13 +162,6 @@ def predict_file(*args):
     message = {"Error": message}
     return message
 
-def predict_data(*args):
-    """
-    Function to make prediction on an uploaded file
-    """
-    message = 'Not implemented (predict_data())'
-    message = {"Error": message}
-    return message
 
 def predict_url(*args):
     """
@@ -85,45 +172,95 @@ def predict_url(*args):
     return message
 
 
+@_catch_error
+def predict(**kwargs):
+    
+    print("predict(**kwargs) - kwargs: %s" % (kwargs)) if debug_model else ''
+
+    if (not any([kwargs['urls'], kwargs['files']]) or
+            all([kwargs['urls'], kwargs['files']])):
+        raise Exception("You must provide either 'url' or 'data' in the payload")
+
+    if kwargs['files']:
+        kwargs['files'] = [kwargs['files']]  # patch until list is available
+        return predict_data(kwargs)
+    elif kwargs['urls']:
+        kwargs['urls'] = [kwargs['urls']]  # patch until list is available
+        return predict_url(kwargs)
+
+
 ###
 # Uncomment the following two lines
 # if you allow only authorized people to do training
 ###
-# import flaat
-# @flaat.login_required()
-def train(train_args):
+@flaat.login_required()
+def train(**train_kwargs):
     """
     Train network
     train_args : dict
-        Json dict with the user's configuration parameters.
-        Can be loaded with json.loads() or with yaml.safe_load()    
     """
 
-    run_results = {"status": "ok", "user_args": train_args, "machine_config": {}, "training": {}, "evaluation": {}}
+    print("[DEBUG] train(**train_kwargs) - train_kwargs: %s" % (train_kwargs)) if debug_model else ''
 
+    # use the schema
+    schema = cfg.TrainArgsSchema()
+    # deserialize key-word arguments
+    train_args = schema.load(train_kwargs)
+
+    run_results = {"status": "ok", 
+                   "user_args": train_args, 
+                   "machine_config": {}, 
+                   "training": {}, 
+                   "evaluation": {}
+                  }
+
+    timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
+    Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
+    Eval_Dir = os.path.join(Train_Run_Dir, "eval_dir")
+
+    if not os.path.exists(Train_Run_Dir):
+        os.makedirs(Train_Run_Dir)
+    else:
+        raise BadRequest(
+                "Directory to store training results, {}, already exists!"
+                .format(Train_Run_Dir))
+        
     # Remove possible existing model and log files
-    for f in os.listdir(cfg.MODELS_DIR):
-        file_path = os.path.join(cfg.MODELS_DIR, f)
-        try:
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-        except Exception as e:
-            print(e)
+    #for f in os.listdir(Train_Run_Dir):
+    #    file_path = os.path.join(Train_Run_Dir, f)
+    #    try:
+    #        if os.path.isfile(file_path):
+    #            os.unlink(file_path)
+    #    except Exception as e:
+    #        print(e)
+
+    # how often print training info
+    if train_args['num_epochs'] < 1.0:
+        display_every = 10
+    else:
+        display_every = 100
 
     # Declare training arguments
-    kwargs = {'model': yaml.safe_load(train_args.model).split(' ')[0],
-              'num_gpus': yaml.safe_load(train_args.num_gpus),
-              'num_epochs': yaml.safe_load(train_args.num_epochs),
-              'batch_size': yaml.safe_load(train_args.batch_size_per_device),
-              'optimizer': yaml.safe_load(train_args.optimizer),
+    kwargs = {'batch_size': train_args['batch_size_per_device'],
+              'model': train_args['model'].split(' ')[0],
+              'num_gpus': train_args['num_gpus'],
+              'num_epochs': train_args['num_epochs'],
+              'optimizer': train_args['optimizer'],
+              'use_fp16': train_args['use_fp16'],
+              'weight_decay': train_args['weight_decay'],
               'local_parameter_device': 'cpu',
-              'variable_update': 'parameter_server'
+              'variable_update': 'parameter_server',
+              'allow_growth': True,
+              'print_training_accuracy': True,
+              'display_every': display_every
+              # 'eval_dir': Eval_Dir,
+              # 'eval_interval_secs': 120
               }
 
     # Locate training data and check if the selected network fits it
     # For real data check whether the right data was mounted to the right place and if not download it (cifar10 only)
-    if yaml.safe_load(train_args.dataset) != 'Synthetic data':
-        data_name = yaml.safe_load(train_args.dataset)
+    if train_args['dataset'] != 'Synthetic data':
+        data_name = train_args['dataset']
         if data_name == 'cifar10':
             locate_cifar10()
         if data_name == 'imagenet':
@@ -134,7 +271,7 @@ def train(train_args):
             locate_imagenet_mini()
             kwargs['data_name'] = 'imagenet'
         verify_selected_model(kwargs['model'], kwargs['data_name'])
-        kwargs['data_dir'] = '{}/{}'.format(cfg.DATA_DIR, data_name)
+        kwargs['data_dir'] = os.path.join(cfg.DATA_DIR, data_name)
     else:
         verify_selected_model(kwargs['model'], 'imagenet')
 
@@ -147,15 +284,15 @@ def train(train_args):
         kwargs['device'] = 'gpu'
         kwargs['data_format'] = 'NCHW'
 
-    # Add training info to run_results but not the directories
+    kwargs['train_dir'] = Train_Run_Dir
+    kwargs['benchmark_log_dir'] = Train_Run_Dir
+    # Add training info to run_results
     run_results["training"].update(kwargs)
     if run_results["training"]["device"] == "cpu":
         del run_results["training"]["num_gpus"]  # avoid misleading info
-    kwargs['train_dir'] = cfg.MODELS_DIR
-    kwargs['benchmark_log_dir'] = cfg.MODELS_DIR
-
 
     # Setup and run the benchmark model
+    print("[DEBUG] benchmark kwargs: %s" % (kwargs)) if debug_model else ''
     params = benchmark.make_params(**kwargs)
     try:
         params = benchmark.setup(params)
@@ -176,13 +313,15 @@ def train(train_args):
     end_time_global = datetime.datetime.now().strftime(time_fmt)
 
     # Read training and metric log files and store training results
-    training_file = '{}/training.log'.format(cfg.MODELS_DIR)
-    os.rename('{}/benchmark_run.log'.format(cfg.MODELS_DIR), training_file)
+    training_file = os.path.join(Train_Run_Dir, 'training.log')
+    os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), training_file)
     run_parameters, machine_config = parse_logfile_training(training_file)
     run_results['training'].update(run_parameters)
     run_results["machine_config"] = machine_config
 
-    metric_file = '{}/metric.log'.format(cfg.MODELS_DIR)
+    metric_file = os.path.join(Train_Run_Dir, 'metric.log')
+    # it seems, in the case of Synthetic data we need a delay to close metric.log
+    _wait_final_read(metric_file, "average_examples_per_sec")
     run_results['training']['result'] = {}
     run_results['training']['result']['global_start_time'] = start_time_global
     run_results['training']['result']['global_end_time'] = end_time_global
@@ -193,7 +332,7 @@ def train(train_args):
 
 
     ## Evaluation ##
-    if yaml.safe_load(train_args.evaluation):
+    if train_args['evaluation']:
         run_results["evaluation"] = {}
 
         kwargs_eval = {'model': kwargs['model'],
@@ -203,14 +342,14 @@ def train(train_args):
                        'benchmark_log_dir': kwargs['benchmark_log_dir'],
                        'train_dir': kwargs['train_dir'],
                        'eval': True
-                       # 'eval_dir': cfg.DATA_DIR,
+                       # 'eval_dir': Eval_Dir,
                        }
         run_results['evaluation']['device'] = kwargs_eval['device']
         if run_results['evaluation']['device'] == 'gpu':
             run_results['evaluation']['num_gpus'] = kwargs_eval['num_gpus']  # only for GPU to avoid confusion
 
         # Locate data
-        if yaml.safe_load(train_args.dataset) != 'Synthetic data':
+        if train_args['dataset'] != 'Synthetic data':
             kwargs_eval['data_name'] = kwargs['data_name']
             kwargs_eval['data_dir'] = kwargs['data_dir']
 
@@ -229,16 +368,20 @@ def train(train_args):
 
 
         # Read log files and get evaluation results
-        os.rename('{}/benchmark_run.log'.format(cfg.MODELS_DIR), '{}/evaluation.log'.format(cfg.MODELS_DIR))
-        evaluation_file = '{}/evaluation.log'.format(cfg.MODELS_DIR)
+        evaluation_file = os.path.join(Train_Run_Dir, 'evaluation.log')
+        os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), evaluation_file)
         run_parameters = parse_logfile_evaluation(evaluation_file)
         run_results['evaluation'].update(run_parameters)
 
-        logfile = '{}/metric.log'.format(cfg.MODELS_DIR)
+        logfile = os.path.join(Train_Run_Dir, 'metric.log')
+
         run_results['evaluation']['result'] = {}
         run_results['evaluation']['result']['global_start_time'] = start_time_global
         run_results['evaluation']['result']['global_end_time'] = end_time_global
 
+        # it seems, in the case of Synthetic data we need a delay to close evaluation.log
+        _wait_final_read(logfile, "eval_average_examples_per_sec")
+        
         with open(logfile, "r") as f:
             for line in f:
                 l = json.loads(line)
@@ -283,7 +426,7 @@ def download_untar_public(dataset, remote_url, tar_mode="r"):
                 
             shutil.rmtree(rootdir) # 'strong' remove of the directory, i.e. if not empty
             os.remove(tmp_dataset)
-        print('[INFO] Done extracting files to {}'.format(dataset_dir))
+        print(('[INFO] Done extracting files to {}'.format(dataset_dir)))
 
     except urllib.error.HTTPError as e:
         raise BadRequest('[ERROR] No local dataset found at {}.\
@@ -311,9 +454,10 @@ def locate_cifar10():
 
     # If not available locally, download to data directory
     if not cifar10Local:
-        print('[WARNING] No local copy of Cifar10 found.\
-        Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL))
+        print(('[WARNING] No local copy of Cifar10 found.\
+        Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL)))
         download_untar_public('cifar10', cfg.CIFAR10_REMOTE_URL, 'r:gz')
+
 
 def locate_imagenet_mini():
     """
@@ -324,9 +468,10 @@ def locate_imagenet_mini():
     # Check local availability
     if not os.path.exists(imagenet_mini_dir):
         os.makedirs(imagenet_mini_dir)
-        print('[WARNING] No local copy of imagenet_mini found. \
-        Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL))
+        print(('[WARNING] No local copy of imagenet_mini found. \
+        Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL)))
         download_untar_public('imagenet_mini', cfg.IMAGENET_MINI_REMOTE_URL)
+
 
 def locate_imagenet():
     """
@@ -335,6 +480,7 @@ def locate_imagenet():
     imagenet_dir = os.path.join(cfg.DATA_DIR, 'imagenet')
     if not os.path.exists(imagenet_dir):
         raise BadRequest('No local ImageNet dataset found at {}!'.format(imagenet_dir))
+
 
 def verify_selected_model(model, data_set):
     """
@@ -362,7 +508,10 @@ def parse_logfile_training(logFile):
             if el['name'] == 'batch_size':
                 run_parameters['batch_size'] = el['long_value']
             if el['name'] == 'batch_size_per_device':
-                run_parameters['batch_size_per_device'] = el['float_value']
+                try:
+                    run_parameters['batch_size_per_device'] = el['float_value']
+                except:
+                    run_parameters['batch_size_per_device'] = el['long_value']
             if el['name'] == 'num_batches':
                 run_parameters['num_batches'] = el['long_value']
 
@@ -383,7 +532,10 @@ def parse_logfile_evaluation(logFile):
             if el['name'] == 'batch_size':
                 run_parameters['batch_size'] = el['long_value']
             if el['name'] == 'batch_size_per_device':
-                run_parameters['batch_size_per_device'] = el['float_value']
+                try:
+                    run_parameters['batch_size_per_device'] = el['float_value']
+                except:
+                    run_parameters['batch_size_per_device'] = el['long_value']
             if el['name'] == 'num_batches':
                 run_parameters['num_batches'] = el['long_value']
             if el['name'] == 'data_format':
@@ -400,8 +552,9 @@ def parse_logfile_evaluation(logFile):
 def parse_metric_file(metric_file):
     """ takes the metric file and extracts timestamps and avg_imgs / sec info
     """
+
+    maxStep, minTime, maxTime, avg_examples = 0, 0, 0, 0
     with open(metric_file, "r") as f:
-        maxStep, minTime, maxTime, avg_examples = 0, 0, 0, 0
         for line in f:
             el = json.loads(line)
             if el['name'] == "current_examples_per_sec" and el['global_step'] == 1:
@@ -411,6 +564,7 @@ def parse_metric_file(metric_file):
                 maxStep = el['global_step']
             if el['name'] == 'average_examples_per_sec':
                 avg_examples = el['value']
+
     return minTime, maxTime, avg_examples
 
 
@@ -418,46 +572,44 @@ def get_train_args():
     """
     Returns a dict of dicts to feed the deepaas API parser
     """
-    train_args = cfg.train_args
-    global local_gpus, num_local_gpus
-
-    # convert default values and possible 'choices' into strings
-    for key, val in train_args.items():
-        val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
-        if 'choices' in val:
-            val['choices'] = [str(item) for item in val['choices']]
-
-
-    # Adjust num_gpu option accordingly to available local devices
-    local_devices = device_lib.list_local_devices()
-    local_gpus = [x for x in local_devices if x.device_type == 'GPU']
-    num_local_gpus = len(local_gpus)
-
-    train_args['num_gpus']['choices'] = ['0']
+    d_train = cfg.TrainArgsSchema().fields
+        
     if num_local_gpus == 0:
-        train_args['num_gpus']['default'] = '0'
+        d_train['num_gpus'] = fields.Int(missing=0,
+                              description= 'Number of GPUs to train on \
+                              (one node only). If set to zero, CPU is used.',
+                              required= False
+                              )
     else:
-        train_args['num_gpus']['default'] = '1'
-        for i in range(num_local_gpus): train_args['num_gpus']['choices'].append(str(i+1))
+        num_gpus = []
+        for i in range(num_local_gpus): num_gpus.append(str(i+1))
+        d_train['num_gpus'] = fields.Int(missing=1,
+                              description= 'Number of GPUs to train on \
+                              (one node only). If set to zero, \
+                              CPU is used.',
+                              enum = num_gpus,
+                              required= False
+                              )
 
+    # dictionary sorted by key, 
+    # https://docs.python.org/3.6/library/collections.html#ordereddict-examples-and-recipes
+    train_args = OrderedDict(sorted(d_train.items(), key=lambda t: t[0]))
 
     return train_args
 
 
-# !!! deepaas>=0.5.0 calls get_test_args() to get args for 'predict'
-def get_test_args():
-    predict_args = cfg.predict_args
+# !!! deepaas>=1.0.0 calls get_predict_args() to get args for 'predict'
+def get_predict_args():
 
-    # convert default values and possible 'choices' into strings
-    for key, val in predict_args.items():
-        val['default'] = str(val['default'])  # yaml.safe_dump(val['default']) #json.dumps(val['default'])
-        if 'choices' in val:
-            val['choices'] = [str(item) for item in val['choices']]
+    d_predict = cfg.PredictArgsSchema().fields
+    # dictionary sorted by key, 
+    # https://docs.python.org/3.6/library/collections.html#ordereddict-examples-and-recipes
+    predict_args = OrderedDict(sorted(d_predict.items(), key=lambda t: t[0]))
 
     return predict_args
 
 
-# during development it might be practical
+# during development it might be practical 
 # to check your code from the command line
 def main():
     """
@@ -466,27 +618,83 @@ def main():
     """
 
     if args.method == 'get_metadata':
-        get_metadata()
+        meta = get_metadata()
+        print(json.dumps(meta))
+        return meta 
+    elif args.method == 'predict':
+        ## use the schema
+        #schema = cfg.PredictArgsSchema()
+        #result = schema.load(vars(args))
+    
+        # TODO: change to many files ('for' itteration)
+        if args.files:
+            # create tmp file as later it will be deleted
+            temp = tempfile.NamedTemporaryFile()
+            temp.close()
+            # copy original file into tmp file
+            with open(args.files, "rb") as f:
+                with open(temp.name, "wb") as f_tmp:
+                    for line in f:
+                        f_tmp.write(line)
+        
+            # create file object to mimic aiohttp workflow
+            file_obj = wrapper.UploadedFile(name="data", 
+                                            filename = temp.name,
+                                            content_type=mimetypes.MimeTypes().guess_type(args.files)[0],
+                                            original_filename=args.files)
+            args.files = file_obj
+        
+        results = predict(**vars(args))
+        print(json.dumps(results))
+        return results        
     elif args.method == 'train':
-        train(args)
-    else:
-        get_metadata()
+        start = time.time()
+        results = train(**vars(args))
+        print("Elapsed time:  ", time.time() - start)
+        print(json.dumps(results))
+        return results
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Model parameters')
+    
+    parser = argparse.ArgumentParser(description='Model parameters', 
+                                     add_help=False)
+    
+    cmd_parser = argparse.ArgumentParser()    
+    subparsers = cmd_parser.add_subparsers(
+                            help='methods. Use \"model.py method --help\" to get more info', 
+                            dest='method')
 
-    # get arguments configured for get_train_args()
-    train_args = get_train_args()
+    get_metadata_parser = subparsers.add_parser('get_metadata', 
+                                         help='get_metadata method',
+                                         parents=[parser])
+
+    # get train arguments configured
+    train_parser = subparsers.add_parser('train', 
+                                         help='commands for training',
+                                         parents=[parser])
+    train_args = _fields_to_dict(get_train_args())
     for key, val in train_args.items():
-        parser.add_argument('--%s' % key,
-                            default=val['default'],
-                            type=type(val['default']),
-                            help=val['help'])
+        train_parser.add_argument('--%s' % key,
+                               default=val['default'],
+                               type=val['type'], #may just put str
+                               help=val['help'],
+                               required=val['required'])
 
-    parser.add_argument('--method', type=str, default="get_metadata",
-                        help='Method to use: get_metadata (default), \
-                        predict_file, predict_data, predict_url, train')
-    args = parser.parse_args()
+    # get predict arguments configured
+    predict_parser = subparsers.add_parser('predict', 
+                                           help='commands for prediction',
+                                           parents=[parser])
 
+    predict_args = _fields_to_dict(get_predict_args())
+    for key, val in predict_args.items():
+        predict_parser.add_argument('--%s' % key,
+                               default=val['default'],
+                               type=val['type'], #may just put str
+                               help=val['help'],
+                               required=val['required'])
+
+    args = cmd_parser.parse_args()
+   
     main()
+

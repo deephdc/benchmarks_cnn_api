@@ -1,0 +1,35 @@
+diff --git a/benchmark_cnn.py b/benchmark_cnn.py
+index d3b81d5..86a19f8 100644
+--- a/benchmark_cnn.py
++++ b/benchmark_cnn.py
+@@ -756,11 +756,13 @@ def benchmark_one_step(sess,
+           LOSS_AND_ACCURACY_DIGITS_TO_SHOW, results['top_5_accuracy'])
+     log_fn(log_str)
+     if benchmark_logger:
++      lossval_str = '%.*f' % (LOSS_AND_ACCURACY_DIGITS_TO_SHOW, lossval)
++      loss_dict = { 'loss' : lossval_str }
+       benchmark_logger.log_metric(
+-          'current_examples_per_sec', speed_mean, global_step=step + 1)
++          'current_examples_per_sec', speed_mean, global_step=step + 1, extras=loss_dict)
+       if 'top_1_accuracy' in results:
+         benchmark_logger.log_metric(
+-            'top_1_accuracy', results['top_1_accuracy'], global_step=step + 1)
++            'top_1_accuracy', results['top_1_accuracy'], global_step=step + 1, extras=loss_dict)
+         benchmark_logger.log_metric(
+             'top_5_accuracy', results['top_5_accuracy'], global_step=step + 1)
+   if need_options_and_metadata:
+@@ -1651,10 +1653,10 @@ class BenchmarkCNN(object):
+       log_fn('-' * 64)
+       if self.benchmark_logger:
+         eval_result = {
+-            'eval_top_1_accuracy', accuracy_at_1,
+-            'eval_top_5_accuracy', accuracy_at_5,
+-            'eval_average_examples_per_sec', images_per_sec,
+-            tf.GraphKeys.GLOBAL_STEP, global_step,
++            'eval_top_1_accuracy': accuracy_at_1,
++            'eval_top_5_accuracy': accuracy_at_5,
++            'eval_average_examples_per_sec': images_per_sec,
++            tf.GraphKeys.GLOBAL_STEP: global_step,
+         }
+         self.benchmark_logger.log_evaluation_result(eval_result)
+ 
