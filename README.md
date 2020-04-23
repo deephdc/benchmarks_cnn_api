@@ -3,7 +3,7 @@ DEEP Open Catalogue: API for Tensorflow Benchmarks
 
 [![Build Status](https://jenkins.indigo-datacloud.eu/buildStatus/icon?job=Pipeline-as-code/DEEP-OC-org/benchmarks_cnn_api/test)](https://jenkins.indigo-datacloud.eu/job/Pipeline-as-code/job/DEEP-OC-org/job/benchmarks_cnn_api/job/test)
 
-[tf_cnn_benchmarks](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) from TensorFlow team accessed via [DEEPaaS API](https://github.com/indigo-dc/DEEPaaS), currently V1.
+[tf_cnn_benchmarks](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks) from TensorFlow team accessed via [DEEPaaS API V2](https://github.com/indigo-dc/DEEPaaS).
 
 This is a **wrapper** to access the [TF Benchmarks](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks), **not the benchmarks code** itself! 
 One has to install [tf_cnn_benchmarks](https://github.com/tensorflow/benchmarks/tree/master/scripts/tf_cnn_benchmarks)
