@@ -114,3 +114,9 @@ rm -rf ${TMP_PATH}/${TFModelsTMP}
 ### Delete TMP_PATH, if empty
 [[ "$(ls -A ${TMP_PATH})" ]] && echo "[WARNING] ${TMP_PATH} is NOT empty!" || rm -rf ${TMP_PATH}
 
+### Info message
+TFBenchFullPATH=$(cd ${TFBenchPATH} && pwd)
+echo ""
+echo "===========>>>"
+echo " You may need to add ${TFBenchFullPATH} to PYTHONPATH environment! "
+echo "===========>>>"
