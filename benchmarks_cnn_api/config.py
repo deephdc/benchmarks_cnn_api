@@ -30,6 +30,14 @@ MODELS_DIR = os.path.join(IN_OUT_BASE_DIR, 'models')
 CIFAR10_REMOTE_URL="https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
 IMAGENET_MINI_REMOTE_URL="https://nc.deep-hybrid-datacloud.eu/s/aZr8Hi5Jk7GMSe4/download?path=%2F&files=imagenet_mini.tar"
 
+# FLAAT needs a list of trusted OIDC Providers.
+# we select following three providers:
+Flaat_trusted_OP_list = [
+'https://aai.egi.eu/oidc/',
+'https://iam.deep-hybrid-datacloud.eu/',
+'https://iam.extreme-datacloud.eu/',
+]
+
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
 
 # class / place to describe arguments for train()

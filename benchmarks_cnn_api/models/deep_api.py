@@ -31,10 +31,15 @@ from collections import OrderedDict
 ## DEEPaaS wrapper to get e.g. UploadedFile() object
 from deepaas.model.v2 import wrapper
 
+from functools import wraps
+
 ## Authorization
 from flaat import Flaat
 flaat = Flaat()
-
+# DEEP API V2 uses aiohttp, thus hard code
+# NB: currenlty aiohttp is not fully supported by flaat!
+flaat.set_web_framework("aiohttp")
+flaat.set_trusted_OP_list(cfg.Flaat_trusted_OP_list)
 
 # Switch for debugging in this script
 debug_model = True
@@ -53,12 +58,16 @@ t_file_close_delay = 4
 
 
 def _catch_error(f):
+    """Decorate function to return an error as HTTPBadRequest, in case
+    """
+    @wraps(f)
     def wrap(*args, **kwargs):
         try:
             return f(*args, **kwargs)
         except Exception as e:
             raise HTTPBadRequest(reason=e)
     return wrap
+
 
 def _wait_final_read(input_file, parameter):
     """Function to ensure successful read of the parameter"""
@@ -190,10 +199,9 @@ def predict(**kwargs):
 
 
 ###
-# Uncomment the following two lines
-# if you allow only authorized people to do training
-###
-@flaat.login_required()
+# To allow only authorized people to do training,
+# uncomment the following line (NB: currenlty aiohttp is not supported!!)
+#@flaat.login_required()
 def train(**train_kwargs):
     """
     Train network
