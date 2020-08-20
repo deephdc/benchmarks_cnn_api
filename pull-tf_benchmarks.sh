@@ -44,23 +44,24 @@ else
     exit 2
 fi
 
-# Script full path
+### Script full path
 # https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
 SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
-TMP_PATH="${SCRIPT_PATH}/tmp"
 
-# Check if TMP directory exists
+### Check if TMP directory exists
+TMP_PATH="${SCRIPT_PATH}/tmp"
 if [ ! -d "$TMP_PATH" ]; then
    mkdir $TMP_PATH
 fi
 
-# Clone TF Benchmarks
-echo "[INFO] Installing TF Benchmarks in ${TFBenchPATH}"
+### Clone TF Benchmarks
 TFBenchTMP="benchmarks.tmp"  # temporary dir to clone git repository
 
+# !!! FOR 2.3.0 and 2.2.0 THERE IS NO CORRESPONDING BRANCH, USE 2.1.0 !!!
 if [ "$TFVer" = 2.3 ] || [ "$TFVer" = 2.2 ]; then
     TFVer="2.1"
 fi
+echo "[INFO] Installing TF Benchmarks for TF${TFVer} in ${TFBenchPATH}"
 
 # Swtich to TMP directory, check if we can clone benchmarks there
 cd ${TMP_PATH}
@@ -80,14 +81,15 @@ if test -f ${TF_CNN_PATCH}; then
     patch < ${TF_CNN_PATCH}
 fi
 
-# Clone models/official/utils/logs
-echo "[INFO] Installing models/official/utils/logs under ${TFBenchPATH}"
+### Clone models/official/utils/logs
 TFModelsTMP="models.tmp"  # temporary dir to clone git repository
 
 # !!! FOR 1.14 and 1.15 THERE IS NO CORRESPONDING BRANCH, USE r1.13.0 !!!
 if [ "$TFVer" = 1.14 ] || [ "$TFVer" = 1.15 ]; then
         TFVer="1.13"
 fi
+
+echo "[INFO] Installing models/official/utils/logs for TF${TFVer} under ${TFBenchPATH}"
 
 # Swtich to TMP directory, check if we can clone models/official there
 cd ${TMP_PATH}
@@ -109,6 +111,6 @@ fi
 cd ${SCRIPT_PATH} && mv ${TMP_PATH}/${TFModelsTMP}/official ${TFBenchPATH}
 rm -rf ${TMP_PATH}/${TFModelsTMP}
 
-# Delete TMP_PATH, if empty
+### Delete TMP_PATH, if empty
 [[ "$(ls -A ${TMP_PATH})" ]] && echo "[WARNING] ${TMP_PATH} is NOT empty!" || rm -rf ${TMP_PATH}
 

@@ -1,0 +1,25 @@
+diff --git a/official/utils/logs/logger.py b/official/utils/logs/logger.py
+index 856ce62..b12dd91 100644
+--- a/official/utils/logs/logger.py
++++ b/official/utils/logs/logger.py
+@@ -380,8 +380,18 @@ def _collect_cpu_info(run_info):
+     import cpuinfo    # pylint: disable=g-import-not-at-top
+ 
+     info = cpuinfo.get_cpu_info()
+-    cpu_info["cpu_info"] = info["brand"]
+-    cpu_info["mhz_per_cpu"] = info["hz_advertised_raw"][0] / 1.0e6
++
++    try:
++        cpu_info["cpu_info"] = info["brand"]
++    except:
++        # py-cpuinfo >v5.0.0
++        cpu_info["cpu_info"] = info["brand_raw"]
++
++    try:
++        cpu_info["mhz_per_cpu"] = info["hz_advertised_raw"][0] / 1.0e6
++    except:
++        # py-cpuinfo >v5.0.0
++        cpu_info["mhz_per_cpu"] = info["hz_advertised"][0] / 1.0e6
+ 
+     run_info["machine_config"]["cpu_info"] = cpu_info
+   except ImportError:
