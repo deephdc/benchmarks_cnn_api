@@ -49,13 +49,13 @@ class TrainArgsSchema(Schema):
                                            description='Batch size for each GPU.',
                                            required= False
                                            )
-    dataset = fields.Str(missing='Synthetic data',
-                         enum=['Synthetic data', 
+    dataset = fields.Str(missing='synthetic_data',
+                         enum=['synthetic_data', 
                                'imagenet',
                                'imagenet_mini',
                                'cifar10'],
                          description='Dataset to perform training on. \
-                         Synthetic data: randomly generated ImageNet-like \
+                         synthetic_data: randomly generated ImageNet-like \
                          images; imagenet_mini: 3% of the real ImageNet \
                          dataset',
                          required=False
@@ -74,7 +74,7 @@ class TrainArgsSchema(Schema):
                                'alexnet (ImageNet, Cifar10)'],
                        description='CNN model for training. N.B. Models only \
                        support specific data sets, given in brackets. \
-                       Synthetic data can only be processed by ImageNet models.',
+                       synthetic_data can only be processed by ImageNet models.',
                        required=False
                        )
     num_gpus = fields.Integer(missing=1,

@@ -53,7 +53,7 @@ time_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'  # Timeformat of tf-benchmark
 
 TMP_DIR = tempfile.gettempdir() # set the temporary directory
 
-# in the case of Synthetic data we need a delay to close metric/evaluation.log
+# in the case of synthetic_data we need a delay to close metric/evaluation.log
 t_file_close_delay = 4
 
 
@@ -267,7 +267,7 @@ def train(**train_kwargs):
 
     # Locate training data and check if the selected network fits it
     # For real data check whether the right data was mounted to the right place and if not download it (cifar10 only)
-    if train_args['dataset'] != 'Synthetic data':
+    if train_args['dataset'] != 'synthetic_data':
         data_name = train_args['dataset']
         if data_name == 'cifar10':
             locate_cifar10()
@@ -328,7 +328,7 @@ def train(**train_kwargs):
     run_results["machine_config"] = machine_config
 
     metric_file = os.path.join(Train_Run_Dir, 'metric.log')
-    # it seems, in the case of Synthetic data we need a delay to close metric.log
+    # it seems, in the case of synthetic_data we need a delay to close metric.log
     _wait_final_read(metric_file, "average_examples_per_sec")
     run_results['training']['result'] = {}
     run_results['training']['result']['global_start_time'] = start_time_global
@@ -357,7 +357,7 @@ def train(**train_kwargs):
             run_results['evaluation']['num_gpus'] = kwargs_eval['num_gpus']  # only for GPU to avoid confusion
 
         # Locate data
-        if train_args['dataset'] != 'Synthetic data':
+        if train_args['dataset'] != 'synthetic_data':
             kwargs_eval['data_name'] = kwargs['data_name']
             kwargs_eval['data_dir'] = kwargs['data_dir']
 
@@ -387,7 +387,7 @@ def train(**train_kwargs):
         run_results['evaluation']['result']['global_start_time'] = start_time_global
         run_results['evaluation']['result']['global_end_time'] = end_time_global
 
-        # it seems, in the case of Synthetic data we need a delay to close evaluation.log
+        # it seems, in the case of synthetic_data we need a delay to close evaluation.log
         _wait_final_read(logfile, "eval_average_examples_per_sec")
         
         with open(logfile, "r") as f:
