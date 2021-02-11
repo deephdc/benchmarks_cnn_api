@@ -307,4 +307,3 @@ def get_predict_args():
 
     return predict_args
 
-

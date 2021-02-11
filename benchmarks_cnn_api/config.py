@@ -204,12 +204,6 @@ class PredictArgsSchema(Schema):
                          type="file",
                          data_key="data",
                          location="form",
-                         description="Select the image you \
-                         want to classify."
+                         description="NOT implemented!."
                         )
     
-    urls = fields.Url(required=False,
-                      missing=None,
-                      description="Select an URL of the image \
-                      you want to classify."
-                     )
