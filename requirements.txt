@@ -3,6 +3,7 @@ Sphinx
 python-dotenv>=0.5.1
 py-cpuinfo
 psutil
+progressbar
 
 webargs>=5.5.2
 marshmallow
