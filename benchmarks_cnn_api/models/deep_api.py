@@ -161,35 +161,12 @@ def train(**train_kwargs):
     schema = cfg.get_train_args_schema()
     # deserialize key-word arguments
     train_args = schema.load(train_kwargs)
-
-    run_results = {'machine_config': {},
-                   'benchmark': {
-                       'version': get_metadata()['Version'],
-                       'flavor': cfg.BENCHMARK_FLAVOR,
-                       'docker_base_image': cfg.DOCKER_BASE_IMAGE,
-                       'dataset' : cfg.DATASET,
-                       'tf_version': ''
-                       },
-                   'training': {
-                       'num_gpus': train_args['num_gpus'],
-                       'optimizer': cfg.OPTIMIZER,
-                       'use_fp16': cfg.USE_FP16,
-                       'local_parameter_device': '',
-                       'variable_update': '',
-                       'allow_growth': '',
-                       'device': '',
-                       'data_format': ''
-                       },
-                  }
-
     train_keys = train_args.keys()
     # log the dataset name
     dataset_name = ( train_args['dataset'] if 'dataset' in train_keys 
                                            else cfg.DATASET )
-    run_results['benchmark']['dataset'] = dataset_name
     # log the Tensorflow version
     tf_version = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
-    run_results["benchmark"]["tf_version"] = tf_version
 
     # Declare training arguments for tf_cnn_benchmarks.
     # Defaults are from config.py
@@ -223,6 +200,26 @@ def train(**train_kwargs):
         kwargs['data_dir'] = os.path.join(cfg.DATA_DIR, dataset_name)
 
     # Log training info configured for benchmark_cnn in the run_results
+    run_results = {'machine_config': {},
+                   'benchmark': {
+                       'version': get_metadata()['Version'],
+                       'flavor': cfg.BENCHMARK_FLAVOR,
+                       'docker_base_image': cfg.DOCKER_BASE_IMAGE,
+                       'dataset' : dataset_name,
+                       'tf_version': tf_version
+                       },
+                   'training': {
+                       'num_gpus': 0,
+                       'optimizer': '',
+                       'use_fp16': '',
+                       'local_parameter_device': '',
+                       'variable_update': '',
+                       'allow_growth': '',
+                       'device': '',
+                       'data_format': ''
+                       },
+                  } 
+
     results_train_keys = run_results["training"].keys()
     kwargs_keys = kwargs.keys()
     for key in results_train_keys:

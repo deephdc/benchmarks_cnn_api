@@ -207,9 +207,7 @@ def get_available_gpus():
     """
     local_devices = device_lib.list_local_devices()
     local_gpus = [x for x in local_devices if x.device_type == 'GPU']
-    print(local_gpus)
     num_local_gpus = len(local_gpus)
-    print("[NUM_LOCAL_GPUs]: {}".format(num_local_gpus))
     # Assume all the GPU connected are same model
     if num_local_gpus > 0:
         gpu_model = _parse_gpu_model(local_gpus[0].physical_device_desc)

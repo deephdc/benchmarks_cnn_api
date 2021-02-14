@@ -24,30 +24,11 @@ from werkzeug.exceptions import BadRequest
 
 def train(train_args, kwargs, run_results):
     """Function for training and evalution used in the "pro" flavor
-    Example of run_results:
+    Example of run_results, fields filled by this function:
     
     {
-      "machine_config": {
-        "cpu_info": {
-          "num_cores": 4,
-          "cpu_info": "Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz",
-          "mhz_per_cpu": 2700
-        },
-        "gpu_info": {
-          "count": 1,
-          "model": "GeForce GTX 1070",
-          "memory": 7811910861
-        },
-        "memory_total": 16765304832,
-        "memory_available": 14814158848
-      },
-      "benchmark": {
-        "version": "0.1.0.dev48",
-        "flavor": "pro",
-        "docker_base_image": "",
-        "dataset": "synthetic_data",
-        "tf_version": "1.14.0"
-      },
+      "machine_config": {}, # filled in deep_api.py
+      "benchmark": {}, # filled in deep_api.py
       "training": {
         "allow_growth": true,
         "batch_size": 64,
@@ -84,9 +65,7 @@ def train(train_args, kwargs, run_results):
           "top_5_accuracy": 0.00609375
         }
       },
-      "global_start_time": "2021-02-10T22:59:01.664787Z",
-      "global_end_time": "2021-02-10T23:00:30.489734Z",
-      "global_execution_time_sec": 88.82494688034058
+      ...
     }        
     """
 
@@ -183,6 +162,10 @@ def train(train_args, kwargs, run_results):
                        'eval': True
                        # 'eval_dir': Eval_Dir,
                        }
+
+        if kwargs_eval['device'] == 'cpu':
+            kwargs_eval['batch_size'] = cfg.BATCH_SIZE_CPU
+
         run_results['evaluation']['device'] = kwargs_eval['device']
         if run_results['evaluation']['device'] == 'gpu':
             run_results['evaluation']['num_gpus'] = kwargs_eval['num_gpus']  # only for GPU to avoid confusion

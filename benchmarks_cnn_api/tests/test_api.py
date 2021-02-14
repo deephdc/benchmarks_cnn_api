@@ -19,7 +19,6 @@ import unittest
 from deepaas.api import v2
 from deepaas import config
 from deepaas.tests import base
-from deepaas.model import loading
 
 
 class TestApiV2(base.TestCase):
@@ -63,15 +62,16 @@ class TestApiV2(base.TestCase):
     @test_utils.unittest_run_loop
     async def test_models_model_get_train_returns_200(self):
         resp = await self.client.get("/v2/models/benchmarks_cnn/train/")
+        resp_list = await resp.json()
         self.assert_ok(resp)
-        #self.assertTrue(type(resp.text()) is dict)
+        self.assertTrue(type(resp_list) is list)
 
     @unittest.skip("Spurious failure due to to asyncio closed loop")
     @test_utils.unittest_run_loop
     async def test_models_model_post_train_returns_200(self):
-        ret = await self.client.post("/v2/models/benchmarks_cnn/train/",
+        resp = await self.client.post("/v2/models/benchmarks_cnn/train/",
                                      data={})
-        self.assertEqual(200, ret.status)
+        self.assertEqual(200, resp.status)
 
 
 if __name__ == '__main__':

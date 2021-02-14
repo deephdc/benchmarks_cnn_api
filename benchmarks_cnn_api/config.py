@@ -40,7 +40,7 @@ Flaat_trusted_OP_list = [
 
 # Define CONSTANTS for this benchmark flavors:
 # BENCHMARK_FLAVOR: ['synthetic', 'dataset', 'accuracy', 'pro']
-BENCHMARK_FLAVOR = os.getenv('BENCHMARK_FLAVOR', 'pro')
+BENCHMARK_FLAVOR = os.getenv('BENCHMARK_FLAVOR', 'synthetic')
 # DATASET options: ['synthetic_data', 'imagnet_mini', 'imagenet']
 if BENCHMARK_FLAVOR == 'synthetic':
     DATASET = 'synthetic_data'
@@ -48,9 +48,11 @@ elif BENCHMARK_FLAVOR == 'dataset':
     DATASET = 'imagenet_mini'
 elif BENCHMARK_FLAVOR == 'accuracy':
     DATASET = 'imagenet'
-else:
+elif BENCHMARK_FLAVOR == 'pro':
     DATASET = 'synthetic_data'
-    BENCHMARK_FLAVOR = 'pro'
+else:
+    BENCHMARK_FLAVOR = 'synthetic'
+    DATASET = 'synthetic_data'
     
 DOCKER_BASE_IMAGE = os.getenv('DOCKER_BASE_IMAGE', '')
 
@@ -79,7 +81,7 @@ MODELS = {'googlenet' : 96,
           'vgg16': 16
           }
 BATCH_SIZE_CPU = 16
-NUM_EPOCHS = 0
+NUM_EPOCHS = float(os.getenv('BENCHMARK_NUM_EPOCHS', '0.'))
 OPTIMIZER = 'sgd'  # to consider: [sgd','momentum','rmsprop','adam']
 USE_FP16 = False
 EVALUATION = False
@@ -159,7 +161,7 @@ class TrainArgsSchemaPro(Schema):
                               (one node only). If set to zero, CPU is used.',
                               required= False
                               )
-    num_epochs = fields.Float(missing=1.0,
+    num_epochs = fields.Float(missing=NUM_EPOCHS,
                               description='Number of epochs to \
                               train on (float value, < 1.0 allowed).',
                               required= False
