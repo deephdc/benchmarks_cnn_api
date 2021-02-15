@@ -62,6 +62,7 @@ else
 fi
 
 echo "[INFO] Configured TensorFlow version: $TFVer"
+TFVerMain=$(echo ${TFVer} | cut -d\. -f1)
 
 ### Script full path
 # https://unix.stackexchange.com/questions/17499/get-path-of-current-script-when-executed-through-a-symlink/17500
@@ -84,7 +85,7 @@ if [ "$TFVer" = 2.3 ] || [ "$TFVer" = 2.2 ]; then
 fi
 echo "[INFO] Installing TF Benchmarks for TF${TFVerTF} in ${TFBenchPATH}"
 
-# Swtich to TMP directory, check if we can clone benchmarks there
+# Switch to TMP directory, check if we can clone benchmarks there
 cd ${TMP_PATH}
 if [ -d "${TFBenchTMP}" ]; then
    rm -rf ${TFBenchTMP}
@@ -100,6 +101,13 @@ if test -f ${TF_CNN_PATCH}; then
     cd ${TFBenchPATH} &&
     echo "[INFO] Applying ${TF_CNN_PATCH} in ${TFBenchPATH}" && \
     patch < ${TF_CNN_PATCH}
+else
+    TF_CNN_PATCH="${SCRIPT_PATH}/patches/tf_cnn_benchmarks_${TFVerMain}.patch"
+    if test -f ${TF_CNN_PATCH}; then
+        cd ${TFBenchPATH} &&
+        echo "[INFO] Applying ${TF_CNN_PATCH} in ${TFBenchPATH}" && \
+        patch < ${TF_CNN_PATCH}
+    fi
 fi
 
 ### Official/utils/logs ###
@@ -133,6 +141,12 @@ OFFICIAL_LOGGER_PATCH="${SCRIPT_PATH}/patches/official_logger_${TFVerOff}.patch"
 if test -f ${OFFICIAL_LOGGER_PATCH}; then
     echo "[INFO] Applying ${OFFICIAL_LOGGER_PATCH} patch" && \
     git apply ${OFFICIAL_LOGGER_PATCH}
+else
+    OFFICIAL_LOGGER_PATCH="${SCRIPT_PATH}/patches/official_logger_${TFVerMain}.patch"
+    if test -f ${OFFICIAL_LOGGER_PATCH}; then
+        echo "[INFO] Applying ${OFFICIAL_LOGGER_PATCH} patch" && \
+        git apply ${OFFICIAL_LOGGER_PATCH}
+    fi
 fi
 
 cd ${SCRIPT_PATH} && mv ${TMP_PATH}/${TFModelsTMP}/official ${TFBenchPATH}
