@@ -4,9 +4,9 @@
 """
 
 import os
-from collections import OrderedDict
 from webargs import fields
 from marshmallow import Schema, INCLUDE
+from official.utils.logs import logger as official_logger
 
 # identify basedir for the package
 BASE_DIR = os.path.dirname(os.path.normpath(os.path.dirname(__file__)))
@@ -38,10 +38,89 @@ Flaat_trusted_OP_list = [
 'https://iam.extreme-datacloud.eu/',
 ]
 
+# Define CONSTANTS for this benchmark flavors:
+# BENCHMARK_FLAVOR: ['synthetic', 'dataset', 'accuracy', 'pro']
+BENCHMARK_FLAVOR = os.getenv('BENCHMARK_FLAVOR', 'synthetic')
+# DATASET options: ['synthetic_data', 'imagnet_mini', 'imagenet']
+if BENCHMARK_FLAVOR == 'synthetic':
+    DATASET = 'synthetic_data'
+elif BENCHMARK_FLAVOR == 'dataset':
+    DATASET = 'imagenet_mini'
+elif BENCHMARK_FLAVOR == 'accuracy':
+    DATASET = 'imagenet'
+elif BENCHMARK_FLAVOR == 'pro':
+    DATASET = 'synthetic_data'
+else:
+    BENCHMARK_FLAVOR = 'synthetic'
+    DATASET = 'synthetic_data'
+    
+DOCKER_BASE_IMAGE = os.getenv('DOCKER_BASE_IMAGE', '')
+
+# Use the timeformat of tf-benchmark, smth. '%Y-%m-%dT%H:%M:%S.%fZ'
+TIME_FORMAT = official_logger._DATE_TIME_FORMAT_PATTERN
+## BENCHMARK version ['synthetic', 'dataset', 'accuracy']
+## needs following to be defined.    
+# experimentally found:
+# GTX1070, 8GB:
+# ============
+# googlenet: 192 
+# imagenet : 48
+# resnet50 : 48
+# vgg16    : 32 (48 - reboot)
+# => score = ca. 600
+#
+# also:
+# mobilenet: 1024
+# resnet152: 24
+# vgg19    : 32 (48 - reboot)
+##
+# batch_size(s) are for 4GB memory:
+MODELS = {'googlenet' : 96,
+          'inception3' : 24,
+          'resnet50' : 24,
+          'vgg16': 16
+          }
+BATCH_SIZE_CPU = 16
+NUM_EPOCHS = float(os.getenv('BENCHMARK_NUM_EPOCHS', '0.'))
+OPTIMIZER = 'sgd'  # to consider: [sgd','momentum','rmsprop','adam']
+USE_FP16 = False
+EVALUATION = False
+IF_CLEANUP = True
+##
+
+## DEBUG Flags
+DEBUG_MODEL = True
+
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
 
+def get_train_args_schema():
+    """Function to return the reference to proper TrainArgsSchema
+    """
+    
+    if ( BENCHMARK_FLAVOR == 'synthetic' or 
+         BENCHMARK_FLAVOR == 'dataset' or
+         BENCHMARK_FLAVOR == 'accuracy'
+        ):
+        train_args_schema = TrainArgsSchemaBench()
+    else:
+        train_args_schema = TrainArgsSchemaPro()
+    
+    return train_args_schema
+    
+
 # class / place to describe arguments for train()
-class TrainArgsSchema(Schema):
+class TrainArgsSchemaBench(Schema):
+    class Meta:
+        unknown = INCLUDE  # supports extra parameters
+
+    num_gpus = fields.Integer(missing=1,
+                              description='Number of GPUs to train on \
+                              (one node only). If set to zero, CPU is used.',
+                              required= False
+                              )
+
+# 'pro' version of class TranArgsSchema
+class TrainArgsSchemaPro(Schema):
     class Meta:
         unknown = INCLUDE  # supports extra parameters
 
@@ -82,7 +161,7 @@ class TrainArgsSchema(Schema):
                               (one node only). If set to zero, CPU is used.',
                               required= False
                               )
-    num_epochs = fields.Float(missing=1.0,
+    num_epochs = fields.Float(missing=NUM_EPOCHS,
                               description='Number of epochs to \
                               train on (float value, < 1.0 allowed).',
                               required= False
@@ -109,7 +188,13 @@ class TrainArgsSchema(Schema):
                                 (only meaningful on real data sets!).',
                                 required=False
                                 )
-             
+    if_cleanup = fields.Boolean(missing=False,
+                              enum = [False, True],
+                              description='If to delete training and \
+                              evaluation directories.',
+                              required=False
+                              )
+
 
 # class / place to describe arguments for predict()
 class PredictArgsSchema(Schema):
@@ -121,12 +206,6 @@ class PredictArgsSchema(Schema):
                          type="file",
                          data_key="data",
                          location="form",
-                         description="Select the image you \
-                         want to classify."
+                         description="NOT implemented!."
                         )
     
-    urls = fields.Url(required=False,
-                      missing=None,
-                      description="Select an URL of the image \
-                      you want to classify."
-                     )

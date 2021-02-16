@@ -1,6 +1,8 @@
---- benchmark_cnn.py	2020-04-03 12:08:53.745686033 +0200
-+++ benchmark_cnn_patched.py	2020-04-03 12:27:16.376331356 +0200
-@@ -893,11 +893,13 @@
+diff --git a/scripts/tf_cnn_benchmarks/benchmark_cnn.py b/scripts/tf_cnn_benchmarks/benchmark_cnn.py
+index 6842a4a..5b7a431 100644
+--- a/scripts/tf_cnn_benchmarks/benchmark_cnn.py
++++ b/scripts/tf_cnn_benchmarks/benchmark_cnn.py
+@@ -893,11 +893,13 @@ def benchmark_one_step(sess,
            LOSS_AND_ACCURACY_DIGITS_TO_SHOW, results['top_5_accuracy'])
      log_fn(log_str)
      if benchmark_logger:
@@ -16,7 +18,7 @@
          benchmark_logger.log_metric(
              'top_5_accuracy', results['top_5_accuracy'], global_step=step + 1)
    if need_options_and_metadata:
-@@ -2045,10 +2047,14 @@
+@@ -2045,10 +2047,10 @@ class BenchmarkCNN(object):
          log_fn('-' * 64)
        if self.benchmark_logger:
          eval_result = {
@@ -24,10 +26,6 @@
 -            'eval_top_5_accuracy', accuracy_at_5,
 -            'eval_average_examples_per_sec', images_per_sec,
 -            tf.GraphKeys.GLOBAL_STEP, global_step,
-+            #'eval_top_1_accuracy', accuracy_at_1,
-+            #'eval_top_5_accuracy', accuracy_at_5,
-+            #'eval_average_examples_per_sec', images_per_sec,
-+            #tf.GraphKeys.GLOBAL_STEP, global_step,
 +            'eval_top_1_accuracy': accuracy_at_1,
 +            'eval_top_5_accuracy': accuracy_at_5,
 +            'eval_average_examples_per_sec': images_per_sec,
