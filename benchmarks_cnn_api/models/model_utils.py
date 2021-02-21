@@ -20,7 +20,7 @@ TMP_DIR = tempfile.gettempdir() # set the temporary directory
 # Available models for the data sets
 models_cifar10 = ('alexnet', 'resnet56', 'resnet110')
 models_imagenet = ('alexnet', 'resnet50', 'resnet152', 'mobilenet', 'vgg16', 
-                   'vgg19', 'googlenet', 'overfeat', 'inception3')
+                   'vgg19', 'googlenet', 'overfeat', 'inception3', 'trivial')
 
 progress_bar = None
 
@@ -146,6 +146,21 @@ def verify_selected_model(model, data_set):
             ImageNet dataset supported models are: {}'
             .format(model, models_imagenet))
 
+def create_train_run_dir(kwargs):
+    """Function to create Train_Run_Dir to store training data
+    """
+    timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
+    Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
+    Eval_Dir = os.path.join(Train_Run_Dir, "eval_dir")
+
+    if not os.path.exists(Train_Run_Dir):
+        os.makedirs(Train_Run_Dir)
+    else:
+        raise BadRequest(
+                "Directory to store training results, {}, already exists!"
+                .format(Train_Run_Dir))    
+
+    return Train_Run_Dir, Eval_Dir
 
 def _collect_cpu_info(machine_info):
     """Collect the CPU information for the local environment.

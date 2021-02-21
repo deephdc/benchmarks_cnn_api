@@ -163,8 +163,20 @@ def train(**train_kwargs):
     train_args = schema.load(train_kwargs)
     train_keys = train_args.keys()
     # log the dataset name
-    dataset_name = ( train_args['dataset'] if 'dataset' in train_keys 
-                                           else cfg.DATASET )
+    # dataset options: ['synthetic_data', 'imagnet_mini', 'imagenet']
+    dataset_name = 'synthetic_data'
+    if cfg.BENCHMARK_TYPE == 'benchmark':
+        if train_args['flavor'] == 'synthetic':
+            benchmark_flavor = 'synthetic'
+            dataset_name = 'synthetic_data'
+        if train_args['flavor'] == 'dataset':
+            benchmark_flavor = 'dataset'
+            dataset_name = 'imagenet_mini'
+
+    if cfg.BENCHMARK_TYPE == 'pro':
+        benchmark_flavor = 'pro'
+        dataset_name = train_args['dataset']  
+
     # log the Tensorflow version
     tf_version = '.'.join([str(x) for x in cnn_util.tensorflow_version_tuple()])
 
@@ -203,7 +215,7 @@ def train(**train_kwargs):
     run_results = {'machine_config': {},
                    'benchmark': {
                        'version': get_metadata()['Version'],
-                       'flavor': cfg.BENCHMARK_FLAVOR,
+                       'flavor': benchmark_flavor,
                        'docker_base_image': cfg.DOCKER_BASE_IMAGE,
                        'dataset' : dataset_name,
                        'tf_version': tf_version
@@ -216,10 +228,12 @@ def train(**train_kwargs):
                        'variable_update': '',
                        'allow_growth': '',
                        'device': '',
-                       'data_format': ''
+                       'data_format': '',
+                       'models': []
                        },
-                  } 
+                  }
 
+    # Update run_results with values configured for tf_cnn_benchmarks (kwargs)
     results_train_keys = run_results["training"].keys()
     kwargs_keys = kwargs.keys()
     for key in results_train_keys:
@@ -245,21 +259,19 @@ def train(**train_kwargs):
     if dataset_name == 'imagenet':
         mutils.locate_imagenet()
 
-    if ( cfg.BENCHMARK_FLAVOR == 'synthetic' or 
-         cfg.BENCHMARK_FLAVOR == 'dataset' or
-         cfg.BENCHMARK_FLAVOR == 'accuracy'
-        ):
-        train_sd.train(kwargs, run_results)
-    else:
+    if cfg.BENCHMARK_TYPE == 'pro':
         train_pro.train(train_args, kwargs, run_results)
+    else:
+        train_sd.train(kwargs, run_results)
 
     end_time_global = datetime.datetime.now().strftime(cfg.TIME_FORMAT)
     run_results['global_start_time'] = start_time_global
     run_results['global_end_time'] = end_time_global
     end_time_global = mutils.timestr_to_stamp(end_time_global, cfg.TIME_FORMAT)
-    start_time_global = mutils.timestr_to_stamp(start_time_global, cfg.TIME_FORMAT)
-    run_results['global_execution_time_sec'] = (end_time_global -
-                                                            start_time_global)
+    start_time_global = mutils.timestr_to_stamp(start_time_global, 
+                                                cfg.TIME_FORMAT)
+    run_results['global_execution_time_sec'] = (end_time_global - 
+                                                start_time_global)
 
     return run_results
 

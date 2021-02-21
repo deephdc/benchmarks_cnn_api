@@ -9,7 +9,6 @@ Created on Tue Feb  9 13:56:44 2021
 @author: vykozlov
 """
 
-import datetime
 import json
 import os
 import benchmark_cnn as benchmark
@@ -75,7 +74,7 @@ def train(train_args, kwargs, run_results):
     kwargs['weight_decay'] = train_args['weight_decay']
     
     # Log additional arguments in run_results[]
-    run_results['training']['model'] = kwargs['model']
+    run_results['training']['models'].append(kwargs['model'])
     run_results["training"]['num_epochs'] = kwargs['num_epochs']
     run_results['training']['weight_decay'] = kwargs['weight_decay']
 
@@ -88,17 +87,7 @@ def train(train_args, kwargs, run_results):
         mutils.verify_selected_model(kwargs['model'], 'imagenet')
 
     # Create Train_Run_Dir to store training data
-    timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
-    Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
-    Eval_Dir = os.path.join(Train_Run_Dir, "eval_dir")
-
-    if not os.path.exists(Train_Run_Dir):
-        os.makedirs(Train_Run_Dir)
-    else:
-        raise BadRequest(
-                "Directory to store training results, {}, already exists!"
-                .format(Train_Run_Dir))
-
+    Train_Run_Dir, _ = mutils.create_train_run_dir(kwargs)
     kwargs['train_dir'] = Train_Run_Dir
     kwargs['benchmark_log_dir'] = Train_Run_Dir
 
@@ -106,10 +95,6 @@ def train(train_args, kwargs, run_results):
     if not train_args['if_cleanup']:
         run_results['training']['train_dir'] = kwargs['train_dir']
         run_results['training']['benchmark_log_dir'] = kwargs['benchmark_log_dir']
-
-    # In kwargs num_gpus=1 also for CPU, update num_gpus in run_results to 0
-    if run_results["training"]["device"] == "cpu":
-        run_results["training"]["num_gpus"] = 0 # avoid misleading info
 
     # Setup and run the benchmark model
     print("[DEBUG] benchmark kwargs: %s" % (kwargs)) if cfg.DEBUG_MODEL else ''
@@ -120,7 +105,7 @@ def train(train_args, kwargs, run_results):
     except ValueError as param_ex:
         raise BadRequest("ValueError in parameter setup: {}. Params: {}".format(param_ex, params))
 
-    # Run benchmark
+    # Run benchmark for Training
     bench.print_info()
     try:
         bench.run()

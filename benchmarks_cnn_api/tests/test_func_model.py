@@ -11,12 +11,11 @@ Created on Sat Feb 13 22:39:18 2021
 
 import benchmarks_cnn_api.config as cfg
 import benchmarks_cnn_api.models.deep_api as deep_api
-import os
 import unittest
 
 class TestModelFunc(unittest.TestCase):
     def setUp(self):
-        self.MODELS = { 'mobilenet' : 2 }
+        self.MODELS = { 'trivial' : 2 } # mobilenet isn't avalable in tf2
         self.BATCH_SIZE_CPU = 2
         self.NUM_EPOCHS = 0.
         self.USE_FP16 = False
@@ -28,7 +27,7 @@ class TestModelFunc(unittest.TestCase):
             'model': 'googlenet (ImageNet)', # mobilenet, googlenet
             'optimizer': 'sgd',
             'use_fp16': self.USE_FP16,
-            'weight_decay': 1e-4,
+            'weight_decay': 1.0e-4,
             'evaluation': True,
             'if_cleanup': True
         }
@@ -75,28 +74,28 @@ class TestModelFunc(unittest.TestCase):
         """Function to test the 'pro' flavor
         """
         #self.kwargs['num_gpus'] = 1  # Important: tensorflow uses this also to specify the number of CPUs
-        cfg.BENCHMARK_FLAVOR = 'pro'
+        cfg.BENCHMARK_TYPE = 'pro'
         cfg.BATCH_SIZE_CPU = self.BATCH_SIZE_CPU
         run_results = deep_api.train(**self.train_args)
         train_avg_examples = run_results["training"]["result"]["average_examples_per_sec"]
-        model = run_results['training']['model']
+        model = run_results['training']['models'][0]
         eval_avg_examples = run_results["evaluation"]["result"]["average_examples_per_sec"]
         self.assertTrue(train_avg_examples > 0.)
         self.assertEqual(model, 'googlenet') # mobilenet, googlenet
         self.assertTrue(eval_avg_examples > 0.)
 
     def test_train_synth(self):
-        """Function to test synthetic/dataset flavor
+        """Function to test synthetic flavor
         """
         #self.kwargs['num_gpus'] = 1  # Important: tensorflow uses this also to specify the number of CPUs
-        cfg.BENCHMARK_FLAVOR = 'synthetic'
+        cfg.BENCHMARK_TYPE = 'benchmark'
         cfg.MODELS = self.MODELS
         cfg.BATCH_SIZE_CPU = self.BATCH_SIZE_CPU
         cfg.NUM_EPOCHS = self.NUM_EPOCHS
         cfg.USE_FP16 = self.USE_FP16
         self.train_args['evaluation'] = False
-        model = list(self.MODELS.keys())[0]
         run_results = deep_api.train(**self.train_args)
+        model = list(self.MODELS.keys())[0]
         train_model_avg_examples = run_results["training"][model]["average_examples_per_sec"]
         score = run_results['training']['score']
         self.assertTrue(train_model_avg_examples > 0.)
