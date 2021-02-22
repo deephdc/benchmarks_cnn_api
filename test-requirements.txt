@@ -11,7 +11,7 @@ testtools>=1.4.0
 pytest
 pytest-cov
 
-# for testing fix TF 1.15.0
-tensorflow==1.15.0
+# for testing fix/update TF 2.2.0
+tensorflow==2.2.0
 
 aiohttp

@@ -39,21 +39,15 @@ Flaat_trusted_OP_list = [
 ]
 
 # Define CONSTANTS for this benchmark flavors:
-# BENCHMARK_FLAVOR: ['synthetic', 'dataset', 'accuracy', 'pro']
-BENCHMARK_FLAVOR = os.getenv('BENCHMARK_FLAVOR', 'synthetic')
-# DATASET options: ['synthetic_data', 'imagnet_mini', 'imagenet']
-if BENCHMARK_FLAVOR == 'synthetic':
-    DATASET = 'synthetic_data'
-elif BENCHMARK_FLAVOR == 'dataset':
-    DATASET = 'imagenet_mini'
-elif BENCHMARK_FLAVOR == 'accuracy':
-    DATASET = 'imagenet'
-elif BENCHMARK_FLAVOR == 'pro':
-    DATASET = 'synthetic_data'
-else:
-    BENCHMARK_FLAVOR = 'synthetic'
-    DATASET = 'synthetic_data'
-    
+# BENCHMARK_TYPE
+#   benchmark: flavor['synthetic', 'dataset', 'accuracy'?]
+#   pro: 'pro'
+# Use BENCHMARK_GROUP instead of BENCHMARK_TYPE ??
+BENCHMARK_TYPE = os.getenv('BENCHMARK_TYPE', 'benchmark')
+if BENCHMARK_TYPE not in ['benchmark', 'pro']:
+    BENCHMARK_TYPE = 'benchmark'
+
+
 DOCKER_BASE_IMAGE = os.getenv('DOCKER_BASE_IMAGE', '')
 
 # Use the timeformat of tf-benchmark, smth. '%Y-%m-%dT%H:%M:%S.%fZ'
@@ -97,13 +91,10 @@ def get_train_args_schema():
     """Function to return the reference to proper TrainArgsSchema
     """
     
-    if ( BENCHMARK_FLAVOR == 'synthetic' or 
-         BENCHMARK_FLAVOR == 'dataset' or
-         BENCHMARK_FLAVOR == 'accuracy'
-        ):
-        train_args_schema = TrainArgsSchemaBench()
-    else:
+    if BENCHMARK_TYPE == 'pro':
         train_args_schema = TrainArgsSchemaPro()
+    else :
+        train_args_schema = TrainArgsSchemaBench()
     
     return train_args_schema
     
@@ -113,10 +104,16 @@ class TrainArgsSchemaBench(Schema):
     class Meta:
         unknown = INCLUDE  # supports extra parameters
 
+    flavor = fields.Str(missing='synthetic',
+                        enum=['synthetic','dataset'],
+                        description='Benchmark Flavor to use.',
+                        required=False 
+                        )
+
     num_gpus = fields.Integer(missing=1,
                               description='Number of GPUs to train on \
                               (one node only). If set to zero, CPU is used.',
-                              required= False
+                              required=False
                               )
 
 # 'pro' version of class TranArgsSchema
@@ -126,7 +123,7 @@ class TrainArgsSchemaPro(Schema):
 
     batch_size_per_device = fields.Integer(missing=64,
                                            description='Batch size for each GPU.',
-                                           required= False
+                                           required=False
                                            )
     dataset = fields.Str(missing='synthetic_data',
                          enum=['synthetic_data', 
@@ -159,17 +156,17 @@ class TrainArgsSchemaPro(Schema):
     num_gpus = fields.Integer(missing=1,
                               description='Number of GPUs to train on \
                               (one node only). If set to zero, CPU is used.',
-                              required= False
+                              required=False
                               )
     num_epochs = fields.Float(missing=NUM_EPOCHS,
                               description='Number of epochs to \
                               train on (float value, < 1.0 allowed).',
-                              required= False
+                              required=False
                               )
     optimizer = fields.Str(missing='sgd',
                            enum=['sgd','momentum','rmsprop','adam'],
                            description='Optimizer to use.',
-                           required= False 
+                           required=False 
                            )
     use_fp16 = fields.Boolean(missing=False,
                               enum = [False, True],

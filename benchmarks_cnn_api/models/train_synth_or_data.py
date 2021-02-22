@@ -13,7 +13,6 @@ import benchmark_cnn as benchmark
 # import project's config.py
 import benchmarks_cnn_api.config as cfg
 import benchmarks_cnn_api.models.model_utils as mutils
-import datetime
 import os
 import shutil
 
@@ -54,7 +53,7 @@ def train(kwargs, run_results):
     for model, batch_size in cfg.MODELS.items():
         print()
         print("[INFO] Testing {} model ...".format(model))
-        # Check if the selected network fits the dataset
+
         kwargs['model'] = model
         # in the case of CPU, use batch_size = 8
         if kwargs['device'] == 'gpu':
@@ -62,22 +61,17 @@ def train(kwargs, run_results):
         else:
             kwargs['batch_size'] = cfg.BATCH_SIZE_CPU
 
-        if cfg.DATASET != 'synthetic_data':
-            mutils.verify_selected_model(kwargs['model'], kwargs['data_name'])
+        # Check if the selected network fits the dataset
+        if 'data_name' in kwargs.keys():
+            if kwargs['data_name'] != 'synthetic_data':
+                mutils.verify_selected_model(kwargs['model'],
+                                             kwargs['data_name'])
         else:
             mutils.verify_selected_model(kwargs['model'], 'imagenet')
 
-        # Create Train_Run_Dir to store training data        
-        timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
-        Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
-    
-        if not os.path.exists(Train_Run_Dir):
-            os.makedirs(Train_Run_Dir)
-        else:
-            raise BadRequest(
-                    "Directory to store training results, {}, already exists!"
-                    .format(Train_Run_Dir))
-    
+        # Create Train_Run_Dir to store training data.
+        # In the 'benchmark' case, we do not log directory names
+        Train_Run_Dir, _ = mutils.create_train_run_dir(kwargs)    
         kwargs['train_dir'] = Train_Run_Dir
         kwargs['benchmark_log_dir'] = Train_Run_Dir
     
@@ -91,7 +85,7 @@ def train(kwargs, run_results):
  
         # Run benchmark and measure total execution time
         bench.print_info()
-    
+
         try:
             bench.run()
         except ValueError as ve:
@@ -105,6 +99,7 @@ def train(kwargs, run_results):
         metric_file = os.path.join(Train_Run_Dir, 'metric.log')
         # it seems, in the case of synthetic_data we need a delay to close metric.log
         mutils.wait_final_read(metric_file, "average_examples_per_sec")
+        run_results['training']['models'].append(kwargs['model'])
         run_results['training'][model] = {}
         run_results['training'][model].update(run_parameters) 
         run_results['training'][model]['num_epochs'] = kwargs['num_epochs']
