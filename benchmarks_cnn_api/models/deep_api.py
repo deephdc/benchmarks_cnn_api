@@ -191,7 +191,7 @@ def train(**train_kwargs):
     kwargs['use_fp16'] = ( train_args['use_fp16'] if 'use_fp16' in train_keys 
                                                       else cfg.USE_FP16 )
     kwargs['local_parameter_device'] = 'cpu'
-    kwargs['variable_update'] = 'parameter_server'
+    kwargs['variable_update'] = cfg.VARIABLE_UPDATE
     kwargs['allow_growth'] = True
     kwargs['print_training_accuracy'] = True
     # how often print training info

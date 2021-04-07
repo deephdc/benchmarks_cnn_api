@@ -77,6 +77,9 @@ MODELS = {'googlenet' : 96,
 BATCH_SIZE_CPU = 16
 NUM_EPOCHS = float(os.getenv('BENCHMARK_NUM_EPOCHS', '0.'))
 OPTIMIZER = 'sgd'  # to consider: [sgd','momentum','rmsprop','adam']
+# variable_update = 'parameter_server' if env variable is not set
+# provide 'horovod', if horovod is available!
+VARIABLE_UPDATE = os.getenv('BENCHMARK_VARIABLE_UPDATE', 'parameter_server')
 USE_FP16 = False
 EVALUATION = False
 IF_CLEANUP = True
