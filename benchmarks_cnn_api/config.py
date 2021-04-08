@@ -3,10 +3,16 @@
    Module to define CONSTANTS used across the project
 """
 
+import logging
 import os
 from webargs import fields
 from marshmallow import Schema, INCLUDE
 from official.utils.logs import logger as official_logger
+
+# logging level accross various scripts
+log_level = logging.DEBUG # DEBUG # WARNING
+## DEBUG Flags # Still need for compatibility!
+DEBUG_MODEL = True
 
 # identify basedir for the package
 BASE_DIR = os.path.dirname(os.path.normpath(os.path.dirname(__file__)))
@@ -86,9 +92,6 @@ IF_CLEANUP = True
 if VARIABLE_UPDATE == 'horovod':
     IF_CLEANUP = False
 ##
-
-## DEBUG Flags
-DEBUG_MODEL = True
 
 # Training and predict(deepaas>=0.5.0) arguments as a dict of dicts 
 

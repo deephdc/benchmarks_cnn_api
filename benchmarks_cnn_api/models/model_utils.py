@@ -15,6 +15,11 @@ import urllib.error
 from tensorflow.python.client import device_lib
 from werkzeug.exceptions import BadRequest
 
+# conigure python logger
+logger = logging.getLogger('__name__') #o3api
+logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s')
+logger.setLevel(cfg.log_level)
+
 TMP_DIR = tempfile.gettempdir() # set the temporary directory
 
 # Available models for the data sets
@@ -48,11 +53,11 @@ def download_untar_public(dataset, remote_url, tar_mode="r"):
             progress_bar = None
 
     try:
-        print('[INFO] Downloading in {}'.format(tmp_dataset))
+        logger.info('[INFO] Downloading in {}'.format(tmp_dataset))
         fileName, header = urllib.request.urlretrieve(remote_url,
                                                       tmp_dataset,
                                                       _progress)
-        print('[INFO] Extracting tar-archive...')
+        logger.info('[INFO] Extracting tar-archive...')
         with tarfile.open(name=fileName, mode=tar_mode) as tar:
             # archive name and dataset name maybe different
             # de-archive, then move files one-by-one to dataset_dir
@@ -68,13 +73,13 @@ def download_untar_public(dataset, remote_url, tar_mode="r"):
                 except OSError:
                     msg = '[WARNING] {} probably found in {}, '.format(f, dataset_dir) + \
                     "trying to remove it and re-copy.."
-                    print(msg)
+                    logger.warning(msg)
                     os.remove(os.path.join(dataset_dir, f))
                     shutil.move(os.path.join(rootdir, f), dataset_dir)
                 
             shutil.rmtree(rootdir) # 'strong' remove of the directory, i.e. if not empty
             os.remove(tmp_dataset)
-        print(('[INFO] Done extracting files to {}'.format(dataset_dir)))
+        logger.info(('[INFO] Done extracting files to {}'.format(dataset_dir)))
 
     except urllib.error.HTTPError as e:
         raise BadRequest('[ERROR] No local dataset found at {}.\
@@ -102,7 +107,7 @@ def locate_cifar10():
 
     # If not available locally, download to data directory
     if not cifar10Local:
-        print(('[WARNING] No local copy of Cifar10 found.\
+        logger.warning(('[WARNING] No local copy of Cifar10 found.\
         Trying to download from {}'.format(cfg.CIFAR10_REMOTE_URL)))
         download_untar_public('cifar10', cfg.CIFAR10_REMOTE_URL, 'r:gz')
 
@@ -116,7 +121,7 @@ def locate_imagenet_mini():
     # Check local availability
     if not os.path.exists(imagenet_mini_dir):
         #os.makedirs(imagenet_mini_dir)
-        print(('[WARNING] No local copy of imagenet_mini found. \
+        logger.warning(('[WARNING] No local copy of imagenet_mini found. \
         Trying to download from {}'.format(cfg.IMAGENET_MINI_REMOTE_URL)))
         download_untar_public('imagenet_mini', cfg.IMAGENET_MINI_REMOTE_URL)
 
@@ -151,13 +156,23 @@ def create_train_run_dir(kwargs):
     """
     timestamp = int(datetime.datetime.timestamp(datetime.datetime.now()))
     Train_Run_Dir = os.path.join(cfg.MODELS_DIR, str(timestamp))
-    Eval_Dir = os.path.join(Train_Run_Dir, "eval_dir")
+    Eval_Dir = os.path.join(Train_Run_Dir, 'eval_dir')
 
     if not os.path.exists(Train_Run_Dir):
-        os.makedirs(Train_Run_Dir)
+        try:
+            os.makedirs(Train_Run_Dir)
+        except OSError, e:
+            logger.warning('OSError: {}. Directory {} seems to exist'
+                           .format(e, Train_Run_Dir))
+            pass
     
     if not os.path.exists(Eval_Dir):
-        os.makedirs(Eval_Dir)
+        try:
+            os.makedirs(Eval_Dir)
+        except OSError, e:
+            logger.warning('OSError: {}. Directory {} seems to exist'
+                           .format(e, Eval_Dir))
+            pass
     #else:
     #    # The following fails for horovod (or other parallelisation)
     #    raise BadRequest(
