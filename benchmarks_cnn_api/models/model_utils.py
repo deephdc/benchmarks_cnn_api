@@ -155,10 +155,11 @@ def create_train_run_dir(kwargs):
 
     if not os.path.exists(Train_Run_Dir):
         os.makedirs(Train_Run_Dir)
-    else:
-        raise BadRequest(
-                "Directory to store training results, {}, already exists!"
-                .format(Train_Run_Dir))    
+    #else:
+    #    # The following fails for horovod (or other parallelisation)
+    #    raise BadRequest(
+    #            "Directory to store training results, {}, already exists!"
+    #            .format(Train_Run_Dir))    
 
     return Train_Run_Dir, Eval_Dir
 
