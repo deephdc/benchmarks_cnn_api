@@ -82,6 +82,7 @@ TFVerTF=${TFVer}
 # !!! FOR 2.4.0, 2.3.0, 2.2.0 THERE IS NO CORRESPONDING BRANCH, USE 2.1.0 !!!
 if [ "$TFVer" = 2.4 ] || [ "$TFVer" = 2.3 ] || [ "$TFVer" = 2.2 ]; then
     TFVerTF="2.1"
+    TFVerOff="2.1"
 fi
 echo "[INFO] Installing TF Benchmarks for TF${TFVerTF} in ${TFBenchPATH}"
 
