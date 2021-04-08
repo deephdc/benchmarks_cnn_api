@@ -1,6 +1,7 @@
 import benchmarks_cnn_api.config as cfg
 import datetime
 import json
+import logging
 import multiprocessing
 import os
 import progressbar
