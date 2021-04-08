@@ -25,7 +25,7 @@ def train(kwargs, run_results):
     'synthetic'/'dataset' flavor.
     Updates run_results{}
     """
-    
+
     cnn_score = 0.
     # sort the dictionary alphabetically
     run_results['training'] = OrderedDict(sorted(run_results['training'].items(), 
@@ -74,7 +74,7 @@ def train(kwargs, run_results):
         Train_Run_Dir, Eval_Dir = mutils.create_train_run_dir(kwargs)    
         kwargs['train_dir'] = Train_Run_Dir
         kwargs['benchmark_log_dir'] = Train_Run_Dir
-    
+
         print("[DEBUG] benchmark kwargs: %s" % (kwargs)) if cfg.DEBUG_MODEL else ''
         params = benchmark.make_params(**kwargs)
         try:
@@ -82,7 +82,7 @@ def train(kwargs, run_results):
             bench = benchmark.BenchmarkCNN(params)
         except ValueError as param_ex:
             raise BadRequest("ValueError in parameter setup: {}. Params: {}".format(param_ex, params))
- 
+
         # Run benchmark and measure total execution time
         bench.print_info()
 
@@ -90,7 +90,7 @@ def train(kwargs, run_results):
             bench.run()
         except ValueError as ve:
             raise BadRequest('ValueError in benchmark execution: {}'.format(ve))
-    
+
         # Read training and metric log files and store training results
         training_file = os.path.join(Train_Run_Dir, 'benchmark_run.log')
         # Skip renaming (!):
@@ -119,4 +119,3 @@ def train(kwargs, run_results):
             shutil.rmtree(Train_Run_Dir)
 
     run_results['training']['score'] = cnn_score
-

@@ -122,7 +122,7 @@ def train(train_args, kwargs, run_results):
     run_results['training'].update(run_parameters)
 
     # sort the dictionary alphabetically
-    run_results['training'] = OrderedDict(sorted(run_results['training'].items(), 
+    run_results['training'] = OrderedDict(sorted(run_results['training'].items(),
                                           key=lambda t: t[0]))
 
     metric_file = os.path.join(Train_Run_Dir, 'metric.log')
@@ -189,7 +189,7 @@ def train(train_args, kwargs, run_results):
 
         # it seems, in the case of synthetic_data we need a delay to close evaluation.log
         mutils.wait_final_read(logfile, "eval_average_examples_per_sec")
-        
+
         with open(logfile, "r") as f:
             for line in f:
                 l = json.loads(line)

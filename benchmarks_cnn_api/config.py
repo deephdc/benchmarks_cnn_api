@@ -83,6 +83,8 @@ VARIABLE_UPDATE = os.getenv('BENCHMARK_VARIABLE_UPDATE', 'parameter_server')
 USE_FP16 = False
 EVALUATION = False
 IF_CLEANUP = True
+if VARIABLE_UPDATE == 'horovod':
+    IF_CLEANUP = False
 ##
 
 ## DEBUG Flags
