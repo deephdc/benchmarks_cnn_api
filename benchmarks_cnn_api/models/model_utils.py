@@ -155,6 +155,9 @@ def create_train_run_dir(kwargs):
 
     if not os.path.exists(Train_Run_Dir):
         os.makedirs(Train_Run_Dir)
+    
+    if not os.path.exists(Eval_Dir):
+        os.makedirs(Eval_Dir)
     #else:
     #    # The following fails for horovod (or other parallelisation)
     #    raise BadRequest(

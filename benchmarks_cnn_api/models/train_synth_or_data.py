@@ -71,7 +71,7 @@ def train(kwargs, run_results):
 
         # Create Train_Run_Dir to store training data.
         # In the 'benchmark' case, we do not log directory names
-        Train_Run_Dir, _ = mutils.create_train_run_dir(kwargs)    
+        Train_Run_Dir, Eval_Dir = mutils.create_train_run_dir(kwargs)    
         kwargs['train_dir'] = Train_Run_Dir
         kwargs['benchmark_log_dir'] = Train_Run_Dir
     
@@ -92,8 +92,11 @@ def train(kwargs, run_results):
             raise BadRequest('ValueError in benchmark execution: {}'.format(ve))
     
         # Read training and metric log files and store training results
-        training_file = os.path.join(Train_Run_Dir, 'training.log')
-        os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), training_file)
+        training_file = os.path.join(Train_Run_Dir, 'benchmark_run.log')
+        # Skip renaming (!):
+        # in the case of horovod (running in parallel) causes problem...
+        #training_file = os.path.join(Train_Run_Dir, 'training.log')
+        #os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), training_file)
         run_parameters = mutils.parse_logfile_training(training_file)
 
         metric_file = os.path.join(Train_Run_Dir, 'metric.log')

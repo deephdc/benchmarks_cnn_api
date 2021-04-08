@@ -87,7 +87,7 @@ def train(train_args, kwargs, run_results):
         mutils.verify_selected_model(kwargs['model'], 'imagenet')
 
     # Create Train_Run_Dir to store training data
-    Train_Run_Dir, _ = mutils.create_train_run_dir(kwargs)
+    Train_Run_Dir, Eval_Dir = mutils.create_train_run_dir(kwargs)
     kwargs['train_dir'] = Train_Run_Dir
     kwargs['benchmark_log_dir'] = Train_Run_Dir
 
@@ -113,8 +113,11 @@ def train(train_args, kwargs, run_results):
         raise BadRequest('ValueError in benchmark execution: {}'.format(ve))
 
     # Read training and metric log files and store training results
-    training_file = os.path.join(Train_Run_Dir, 'training.log')
-    os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), training_file)
+    training_file = os.path.join(Train_Run_Dir, 'benchmark_run.log')
+    # Skip renaming (!):
+    # in the case of horovod (running in parallel) causes problem...
+    #training_file = os.path.join(Train_Run_Dir, 'training.log')
+    #os.rename(os.path.join(Train_Run_Dir, 'benchmark_run.log'), training_file)
     run_parameters = mutils.parse_logfile_training(training_file)
     run_results['training'].update(run_parameters)
 
@@ -144,8 +147,8 @@ def train(train_args, kwargs, run_results):
                        'data_format': kwargs['data_format'],
                        'benchmark_log_dir': kwargs['benchmark_log_dir'],
                        'train_dir': kwargs['train_dir'],
-                       'eval': True
-                       # 'eval_dir': Eval_Dir,
+                       'eval': True,
+                       'eval_dir': Eval_Dir,
                        }
 
         if kwargs_eval['device'] == 'cpu':
