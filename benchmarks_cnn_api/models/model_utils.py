@@ -161,15 +161,16 @@ def create_train_run_dir(kwargs):
     if not os.path.exists(Train_Run_Dir):
         try:
             os.makedirs(Train_Run_Dir)
-        except OSError, e:
-            logger.warning('OSError: {}. Directory {} seems to exist'
+        except OSError as e:
+           logger.warning('OSError: {}. Directory {} seems to exist'
                            .format(e, Train_Run_Dir))
-            pass
-    
+           pass
+
+
     if not os.path.exists(Eval_Dir):
         try:
             os.makedirs(Eval_Dir)
-        except OSError, e:
+        except OSError as e:
             logger.warning('OSError: {}. Directory {} seems to exist'
                            .format(e, Eval_Dir))
             pass
