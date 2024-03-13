@@ -1,3 +1,7 @@
+---
+# The Repository is ARCHIVED!
+### it is now maintained in https://github.com/ai4os-hub/tf-benchmarks-cnn/
+---
 DEEP Open Catalogue: API for Tensorflow Benchmarks
 ==============================
 
